@@ -1,4 +1,4 @@
-
+NOTE: This is early release of React Native support.
 
 <p align="center">
     <br/>
