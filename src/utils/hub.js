@@ -19,6 +19,7 @@ if (!globalThis.ReadableStream) {
 }
 
 const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
+const SUPPORT_LOAD_FROM_FS = IS_REACT_NATIVE || typeof fs.promises !== 'undefined';
 
 /**
  * @typedef {Object} PretrainedOptions Options for loading a pretrained model.     
@@ -69,7 +70,7 @@ class FileResponse {
      * @param {string|URL} filePath
      */
     constructor(filePath) {
-        this.filePath = filePath;
+        this.url = filePath;
         this.headers = new Headers();
 
         this.exists = fs.existsSync(filePath);
@@ -105,8 +106,8 @@ class FileResponse {
      */
     updateContentType() {
         // Set content-type header based on file extension
-        const extension = this.filePath.toString().split('.').pop().toLowerCase();
-        this.headers.set('content-type', getMIME(this.filePath));
+        const extension = this.url.toString().split('.').pop().toLowerCase();
+        this.headers.set('content-type', getMIME(this.url));
     }
 
     /**
@@ -114,7 +115,7 @@ class FileResponse {
      * @returns {FileResponse} A new FileResponse object with the same properties as the current object.
      */
     clone() {
-        let response = new FileResponse(this.filePath);
+        let response = new FileResponse(this.url);
         response.exists = this.exists;
         response.status = this.status;
         response.statusText = this.statusText;
@@ -129,7 +130,7 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async arrayBuffer() {
-        const data = await fs.promises.readFile(this.filePath);
+        const data = await fs.promises.readFile(this.url);
         return data.buffer;
     }
 
@@ -140,7 +141,7 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async blob() {
-        const data = await fs.promises.readFile(this.filePath);
+        const data = await fs.promises.readFile(this.url);
         return new Blob([data], { type: this.headers.get('content-type') });
     }
 
@@ -151,7 +152,7 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async text() {
-        const data = await fs.promises.readFile(this.filePath, 'utf8');
+        const data = await fs.promises.readFile(this.url, 'utf8');
         return data;
     }
 
@@ -748,7 +749,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
 
     // Return file URL if not need decode (e.g. .onnx file)
     if (
-        IS_REACT_NATIVE &&
+        SUPPORT_LOAD_FROM_FS &&
         response.headers.get('content-type') === 'application/octet-stream'
     ) {
         return response.url;
