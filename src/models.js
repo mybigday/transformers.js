@@ -51,6 +51,7 @@ import {
 
 import {
     getModelFile,
+    getModelPath,
     getModelJSON,
 } from './utils/hub.js';
 
@@ -123,26 +124,22 @@ const MODEL_CLASS_TO_NAME_MAPPING = new Map();
  */
 async function constructSession(pretrained_model_name_or_path, fileName, options) {
     // TODO add option for user to force specify their desired execution provider
-    let modelFileName = `onnx/${fileName}${options.quantized ? '_quantized' : ''}.onnx`;
-    let buffer = await getModelFile(pretrained_model_name_or_path, modelFileName, true, options);
 
-    try {
+    if (IS_BROWSER || !env.useFS || !env.allowLocalModels || !env.useCustomCache) {
+        let modelFileName = `onnx/${fileName}${options.quantized ? '_quantized' : ''}.onnx`;
+        let buffer = await getModelFile(pretrained_model_name_or_path, modelFileName, true, options);
+
         return await InferenceSession.create(buffer, {
             executionProviders,
         });
-    } catch (err) {
-        // If the execution provided was only wasm, throw the error
-        if (!env.allowFallback || executionProviders.length === 1 && executionProviders[0] === 'wasm') {
-            throw err;
-        }
+    } else {
+        let modelFileName = `onnx/${fileName}.onnx`;
+        let modelPath = await getModelPath(pretrained_model_name_or_path, modelFileName, true, options);
+        // Download optional external data file
+        await getModelPath(pretrained_model_name_or_path, `${modelFileName}_data`, false, options);
 
-        console.warn(err);
-        console.warn(
-            'Something went wrong during model construction (most likely a missing operation). ' +
-            'Using `wasm` as a fallback. '
-        )
-        return await InferenceSession.create(buffer, {
-            executionProviders: ['wasm']
+        return await InferenceSession.create(modelPath, {
+            executionProviders,
         });
     }
 }
@@ -3818,11 +3815,7 @@ export class VitMattePreTrainedModel extends PreTrainedModel { }
  * import { Tensor, cat } from '@xenova/transformers';
  * 
  * // Visualize predicted alpha matte
- * const imageTensor = new Tensor(
- *   'uint8',
- *   new Uint8Array(image.data),
- *   [image.height, image.width, image.channels]
- * ).transpose(2, 0, 1);
+ * const imageTensor = image.toTensor();
  * 
  * // Convert float (0-1) alpha matte to uint8 (0-255)
  * const alphaChannel = alphas
@@ -5450,6 +5443,29 @@ export class StableLmModel extends StableLmPreTrainedModel { }
 export class StableLmForCausalLM extends StableLmPreTrainedModel { }
 //////////////////////////////////////////////////
 
+
+//////////////////////////////////////////////////
+export class EfficientNetPreTrainedModel extends PreTrainedModel { }
+
+/**
+ * The bare EfficientNet model outputting raw features without any specific head on top.
+ */
+export class EfficientNetModel extends EfficientNetPreTrainedModel { }
+
+/**
+ * EfficientNet Model with an image classification head on top (a linear layer on top of the pooled features).
+ */
+export class EfficientNetForImageClassification extends EfficientNetPreTrainedModel {
+    /**
+     * @param {any} model_inputs
+     */
+    async _call(model_inputs) {
+        return new SequenceClassifierOutput(await super._call(model_inputs));
+    }
+}
+//////////////////////////////////////////////////
+
+
 //////////////////////////////////////////////////
 // AutoModels, used to simplify construction of PreTrainedModels
 // (uses config to instantiate correct class)
@@ -5571,6 +5587,7 @@ const MODEL_MAPPING_NAMES_ENCODER_ONLY = new Map([
     ['glpn', ['GLPNModel', GLPNModel]],
 
     ['hifigan', ['SpeechT5HifiGan', SpeechT5HifiGan]],
+    ['efficientnet', ['EfficientNetModel', EfficientNetModel]],
 
 ]);
 
@@ -5747,6 +5764,7 @@ const MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES = new Map([
     ['resnet', ['ResNetForImageClassification', ResNetForImageClassification]],
     ['swin', ['SwinForImageClassification', SwinForImageClassification]],
     ['segformer', ['SegformerForImageClassification', SegformerForImageClassification]],
+    ['efficientnet', ['EfficientNetForImageClassification', EfficientNetForImageClassification]],
 ]);
 
 const MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES = new Map([
@@ -5816,6 +5834,12 @@ const MODEL_FOR_DEPTH_ESTIMATION_MAPPING_NAMES = new Map([
     ['glpn', ['GLPNForDepthEstimation', GLPNForDepthEstimation]],
 ])
 
+// NOTE: This is custom to Transformers.js, and is necessary because certain models
+// (e.g., CLIP) are split into vision and text components
+const MODEL_FOR_IMAGE_FEATURE_EXTRACTION_MAPPING_NAMES = new Map([
+    ['clip', ['CLIPVisionModelWithProjection', CLIPVisionModelWithProjection]],
+    ['siglip', ['SiglipVisionModel', SiglipVisionModel]],
+])
 
 const MODEL_CLASS_TYPE_MAPPING = [
     [MODEL_MAPPING_NAMES_ENCODER_ONLY, MODEL_TYPES.EncoderOnly],
@@ -5844,6 +5868,9 @@ const MODEL_CLASS_TYPE_MAPPING = [
     [MODEL_FOR_TEXT_TO_WAVEFORM_MAPPING_NAMES, MODEL_TYPES.EncoderOnly],
     [MODEL_FOR_AUDIO_XVECTOR_MAPPING_NAMES, MODEL_TYPES.EncoderOnly],
     [MODEL_FOR_AUDIO_FRAME_CLASSIFICATION_MAPPING_NAMES, MODEL_TYPES.EncoderOnly],
+
+    // Custom:
+    [MODEL_FOR_IMAGE_FEATURE_EXTRACTION_MAPPING_NAMES, MODEL_TYPES.EncoderOnly],
 ];
 
 for (const [mappings, type] of MODEL_CLASS_TYPE_MAPPING) {
@@ -5857,9 +5884,7 @@ for (const [mappings, type] of MODEL_CLASS_TYPE_MAPPING) {
 
 const CUSTOM_MAPPING = [
     ['CLIPTextModelWithProjection', CLIPTextModelWithProjection, MODEL_TYPES.EncoderOnly],
-    ['CLIPVisionModelWithProjection', CLIPVisionModelWithProjection, MODEL_TYPES.EncoderOnly],
     ['SiglipTextModel', SiglipTextModel, MODEL_TYPES.EncoderOnly],
-    ['SiglipVisionModel', SiglipVisionModel, MODEL_TYPES.EncoderOnly],
     ['ClapTextModelWithProjection', ClapTextModelWithProjection, MODEL_TYPES.EncoderOnly],
     ['ClapAudioModelWithProjection', ClapAudioModelWithProjection, MODEL_TYPES.EncoderOnly],
 ]
@@ -6084,6 +6109,10 @@ export class AutoModelForImageToImage extends PretrainedMixin {
 
 export class AutoModelForDepthEstimation extends PretrainedMixin {
     static MODEL_CLASS_MAPPINGS = [MODEL_FOR_DEPTH_ESTIMATION_MAPPING_NAMES];
+}
+
+export class AutoModelForImageFeatureExtraction extends PretrainedMixin {
+    static MODEL_CLASS_MAPPINGS = [MODEL_FOR_IMAGE_FEATURE_EXTRACTION_MAPPING_NAMES];
 }
 
 //////////////////////////////////////////////////
