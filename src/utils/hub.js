@@ -277,20 +277,20 @@ export function fetchBinary(url, options = {}) {
  * @param {string[]} [validHosts=null] A list of valid hostnames. If specified, the URL's hostname must be in this list.
  * @returns {boolean} True if the string is a valid URL, false otherwise.
  */
-function isValidHttpUrl(string, validHosts = null) {
-    // https://stackoverflow.com/a/43467144
+export function isValidUrl(string, protocols = null, validHosts = null) {
     let url;
     try {
         url = new URL(string);
     } catch (_) {
         return false;
     }
+    if (protocols && !protocols.includes(url.protocol)) {
+        return false;
+    }
     if (validHosts && !validHosts.includes(url.hostname)) {
         return false;
     }
-    return IS_REACT_NATIVE
-        ? /^https?:/.test(string)
-        : url.protocol === "http:" || url.protocol === "https:";
+    return true;
 }
 
 /**
@@ -352,7 +352,7 @@ export async function downloadFile(fromUrl, toFile, progress_callback) {
  */
 export async function getFile(urlOrPath) {
 
-    if (env.useFS && !isValidHttpUrl(urlOrPath)) {
+    if (env.useFS && !isValidUrl(urlOrPath, ['http:', 'https:', 'blob:'])) {
         return await FileResponse.create(urlOrPath);
 
     } else if (typeof process !== 'undefined' && process?.release?.name === 'node') {
@@ -363,7 +363,7 @@ export async function getFile(urlOrPath) {
         headers.set('User-Agent', `transformers.js/${version}; is_ci/${IS_CI};`);
 
         // Check whether we are making a request to the Hugging Face Hub.
-        const isHFURL = isValidHttpUrl(urlOrPath, ['huggingface.co', 'hf.co']);
+        const isHFURL = isValidUrl(urlOrPath, ['http:', 'https:'], ['huggingface.co', 'hf.co']);
         if (isHFURL) {
             // If an access token is present in the environment variables,
             // we add it to the request headers.
@@ -611,7 +611,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
         if (env.allowLocalModels) {
             // Accessing local models is enabled, so we try to get the file locally.
             // If request is a valid HTTP URL, we skip the local file check. Otherwise, we try to get the file locally.
-            const isURL = isValidHttpUrl(requestURL);
+            const isURL = isValidUrl(requestURL, ['http:', 'https:']);
             if (!isURL) {
                 try {
                     response = await getFile(localPath);
@@ -645,6 +645,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
                 }
             }
 
+            // File not found locally, so we try to download it from the remote server
             response = await getFile(remoteURL);
 
             if (response.status !== 200) {
