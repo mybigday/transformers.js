@@ -4,9 +4,11 @@ on:
   push:
     branches:
       - main
+      - bricks
   pull_request:
     branches:
       - main
+      - bricks
 
 env:
   TESTING_REMOTELY: true
