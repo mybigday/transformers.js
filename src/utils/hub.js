@@ -33,6 +33,7 @@ const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product ==
  * since we use a git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any identifier allowed by git.
  * NOTE: This setting is ignored for local requests.
  * @property {string} [model_file_name=null] If specified, load the model with this name (excluding the .onnx suffix). Currently only valid for encoder- or decoder-only models.
+ * @property {Object} [session_options={}] Options to pass to the backend session.
  */
 
 /**
@@ -275,7 +276,6 @@ export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
 /**
  * Determines whether the given string is a valid URL.
  * @param {string|URL} string The string to test for validity as an URL.
- * @param {string[]} [protocols=null] A list of valid protocols. If specified, the protocol must be in this list.
  * @param {string[]} [validHosts=null] A list of valid hostnames. If specified, the URL's hostname must be in this list.
  * @returns {boolean} True if the string is a valid URL, false otherwise.
  */
