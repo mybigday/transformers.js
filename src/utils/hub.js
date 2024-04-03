@@ -283,7 +283,21 @@ export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
 export function isValidUrl(string, protocols = null, validHosts = null) {
     let url;
     try {
-        url = new URL(string);
+        if (IS_REACT_NATIVE) {
+            // use regex to parse URL
+            const urlParts = String(string).match(/(\w+:)\/\/([^:/]+)(?::(\d+))?(\/.*)?/);
+            if (!urlParts) {
+                return false;
+            }
+            url = {
+                protocol: urlParts[1],
+                hostname: urlParts[2],
+                port: urlParts[3],
+                path: urlParts[4],
+            };
+        } else {
+            url = new URL(string);
+        }
     } catch (_) {
         return false;
     }
