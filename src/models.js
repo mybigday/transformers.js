@@ -5497,6 +5497,7 @@ export class PretrainedMixin {
         local_files_only = false,
         revision = 'main',
         model_file_name = null,
+        session_options = {},
     } = {}) {
 
         let options = {
@@ -5507,6 +5508,7 @@ export class PretrainedMixin {
             local_files_only,
             revision,
             model_file_name,
+            session_options,
         }
         config = await AutoConfig.from_pretrained(pretrained_model_name_or_path, options);
         if (!options.config) {
