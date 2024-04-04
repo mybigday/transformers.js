@@ -907,7 +907,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
         }
     }
 
-    return response.url;
+    return IS_REACT_NATIVE ? response.url : response.filePath;
 }
 
 /**
