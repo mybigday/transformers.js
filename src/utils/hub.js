@@ -287,32 +287,28 @@ export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
  * @param {string[]} [validHosts=null] A list of valid hostnames. If specified, the URL's hostname must be in this list.
  * @returns {boolean} True if the string is a valid URL, false otherwise.
  */
-export function isValidUrl(string, protocols = null, validHosts = null) {
-    let url;
-    try {
-        if (IS_REACT_NATIVE) {
-            // use regex to parse URL
-            const urlParts = String(string).match(/(\w+:)\/\/([^:/]+)(?::(\d+))?(\/.*)?/);
-            if (!urlParts) {
-                return false;
-            }
-            url = {
-                protocol: urlParts[1],
-                hostname: urlParts[2],
-                port: urlParts[3],
-                path: urlParts[4],
-            };
-        } else {
-            url = new URL(string);
+function isValidUrl(string, protocols = null, validHosts = null) {\
+    if (IS_REACT_NATIVE) {
+        if (protocols && !protocols.some((protocol) => string.startsWith(protocol)))
+            return false;
+        if (validHosts) {
+            const match = string.match(/^(\w+\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)/);
+            if (!match || !validHosts.includes(match[3]))
+              return false;
         }
-    } catch (_) {
-        return false;
-    }
-    if (protocols && !protocols.includes(url.protocol)) {
-        return false;
-    }
-    if (validHosts && !validHosts.includes(url.hostname)) {
-        return false;
+    } else {
+        let url;
+        try {
+            url = new URL(string);
+        } catch (_) {
+            return false;
+        }
+        if (protocols && !protocols.includes(url.protocol)) {
+            return false;
+        }
+        if (validHosts && !validHosts.includes(url.hostname)) {
+            return false;
+        }
     }
     return true;
 }
@@ -323,7 +319,7 @@ export function isValidUrl(string, protocols = null, validHosts = null) {
  * @param {URL|string} fromUrl The URL/path of the file to download.
  * @param {string} toFile The path of the file to download to.
  * @param {function} progress_callback A callback function that is called with progress information.
- * @returns {Promise}
+ * @returns {Promise<void>}
  */
 export async function downloadFile(fromUrl, toFile, progress_callback) {
     if (IS_REACT_NATIVE) {
