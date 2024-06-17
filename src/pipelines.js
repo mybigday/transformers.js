@@ -2643,8 +2643,7 @@ export class TextToAudioPipeline extends (/** @type {new (options: TextToAudioPi
         speaker_embeddings = null,
     } = {}) {
 
-        // If this.processor is not set, we are using a `AutoModelForTextToWaveform` model
-        if (this.processor) {
+        if (AutoModelForTextToSpectrogram.MODEL_CLASS_MAPPINGS[0].has(this.model.config.model_type)) {
             return this._call_text_to_spectrogram(text_inputs, { speaker_embeddings });
         } else {
             return this._call_text_to_waveform(text_inputs);
@@ -2653,11 +2652,15 @@ export class TextToAudioPipeline extends (/** @type {new (options: TextToAudioPi
 
     async _call_text_to_waveform(text_inputs) {
 
-        // Run tokenization
-        const inputs = this.tokenizer(text_inputs, {
-            padding: true,
-            truncation: true,
-        });
+        let inputs;
+        if (this.processor) {
+            inputs = this.processor(text_inputs);
+        } else {
+            inputs = this.tokenizer(text_inputs, {
+                padding: true,
+                truncation: true,
+            });
+        }
 
         // Generate waveform
         const { waveform } = await this.model(inputs);
