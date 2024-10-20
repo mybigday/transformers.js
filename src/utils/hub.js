@@ -9,18 +9,15 @@ import fs from 'fs';
 import path from 'path';
 import { Buffer } from 'buffer';
 
-import { env } from '../env.js';
+import { env, apis } from '../env.js';
 import { dispatchCallback } from './core.js';
 
-
-const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
 
 
 /**
  * @typedef {Object} PretrainedOptions Options for loading a pretrained model.     
- * @property {boolean?} [quantized=true] Whether to load the 8-bit quantized version of the model (only applicable when loading model files).
  * @property {function} [progress_callback=null] If specified, this function will be called during model construction, to provide the user with progress updates.
- * @property {Object} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
+ * @property {import('../configs.js').PretrainedConfig} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
  * - The model is a model provided by the library (loaded with the *model id* string of a pretrained model).
  * - The model is loaded by supplying a local directory as `pretrained_model_name_or_path` and a configuration JSON file named *config.json* is found in the directory.
  * @property {string} [cache_dir=null] Path to a directory in which a downloaded pretrained model configuration should be cached if the standard cache should not be used.
@@ -28,8 +25,21 @@ const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product ==
  * @property {string} [revision='main'] The specific model version to use. It can be a branch name, a tag name, or a commit id,
  * since we use a git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any identifier allowed by git.
  * NOTE: This setting is ignored for local requests.
+ */
+
+/**
+ * @typedef {Object} ModelSpecificPretrainedOptions Options for loading a pretrained model.
+ * @property {string} [subfolder='onnx'] In case the relevant files are located inside a subfolder of the model repo on huggingface.co,
+ * you can specify the folder name here.
  * @property {string} [model_file_name=null] If specified, load the model with this name (excluding the .onnx suffix). Currently only valid for encoder- or decoder-only models.
- * @property {Object} [session_options={}] Options to pass to the backend session.
+ * @property {import("./devices.js").DeviceType|Record<string, import("./devices.js").DeviceType>} [device=null] The device to run the model on. If not specified, the device will be chosen from the environment settings.
+ * @property {import("./dtypes.js").DataType|Record<string, import("./dtypes.js").DataType>} [dtype=null] The data type to use for the model. If not specified, the data type will be chosen from the environment settings.
+ * @property {boolean|Record<string, boolean>} [use_external_data_format=false] Whether to load the model using the external data format (used for models >= 2GB in size).
+ * @property {import('onnxruntime-common').InferenceSession.SessionOptions} [session_options] (Optional) User-specified session options passed to the runtime. If not provided, suitable defaults will be chosen.
+ */
+
+/**
+ * @typedef {PretrainedOptions & ModelSpecificPretrainedOptions} PretrainedModelOptions Options for loading a pretrained model.
  */
 
 /**
@@ -60,16 +70,8 @@ function getMIME(path) {
     return CONTENT_TYPE_MAP[extension] ?? 'application/octet-stream';
 }
 
-/**
- * @property {boolean} ok
- * @property {number} status
- * @property {string} statusText
- * @property {Headers} headers
- * @property {string} url
- * @property {string} filePath
- * @property {ReadableStream<Uint8Array>|null} body
- */
 class FileResponse {
+
     /**
      * Creates a new `FileResponse` object.
      * @param {string|URL} filePath
@@ -87,7 +89,7 @@ class FileResponse {
     static async create(filePath) {
         let response = new FileResponse(filePath);
         
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             response.ok = await fs.exists(response.url);
             if (response.ok) {
                 response.status = 200;
@@ -133,7 +135,7 @@ class FileResponse {
     }
 
     get body() {
-        if (IS_REACT_NATIVE) throw new Error('`body` is not supported in React Native.');
+        if (apis.IS_REACT_NATIVE_ENV) throw new Error('`body` is not supported in React Native.');
         const self = this;
         this._body ??= new ReadableStream({
             start(controller) {
@@ -153,7 +155,7 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async arrayBuffer() {
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             return Buffer.from(await fs.readFile(this.url, 'base64'), 'base64').buffer;
         } else {
             const data = await fs.promises.readFile(this.filePath);
@@ -170,7 +172,7 @@ class FileResponse {
     async blob() {
         /** @type {Buffer} */
         let data;
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             data = Buffer.from(await fs.readFile(this.url, 'base64'), 'base64');
         } else {
             data = await fs.promises.readFile(this.filePath);
@@ -185,7 +187,7 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async text() {
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             return await fs.readFile(this.url, 'utf8');
         } else {
             const data = await fs.promises.readFile(this.filePath, 'utf8');
@@ -274,7 +276,7 @@ function fetchBinaryImpl(url, options = {}) {
     });
 }
 
-export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
+export const fetchBinary = apis.IS_REACT_NATIVE_ENV ? fetchBinaryImpl : fetch;
 
 /**
  * Determines whether the given string is a valid URL.
@@ -284,7 +286,7 @@ export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
  * @returns {boolean} True if the string is a valid URL, false otherwise.
  */
 function isValidUrl(string, protocols = null, validHosts = null) {
-    if (IS_REACT_NATIVE) {
+    if (apis.IS_REACT_NATIVE_ENV) {
         if (protocols && !protocols.some((protocol) => string.startsWith(protocol)))
             return false;
         if (validHosts) {
@@ -318,7 +320,7 @@ function isValidUrl(string, protocols = null, validHosts = null) {
  * @returns {Promise<void>}
  */
 export async function downloadFile(fromUrl, toFile, progress_callback) {
-    if (IS_REACT_NATIVE) {
+    if (apis.IS_REACT_NATIVE_ENV) {
         await fs.mkdir(path.dirname(toFile));
         const { promise } = fs.downloadFile({
             fromUrl,
@@ -470,7 +472,7 @@ class FileCache {
         let outputPath = path.join(this.path, request);
 
         try {
-            if (IS_REACT_NATIVE) {
+            if (apis.IS_REACT_NATIVE_ENV) {
                 await fs.mkdir(path.dirname(outputPath));
                 await fs.writeFile(outputPath, buffer.toString('base64'), 'base64');
             } else {
@@ -904,7 +906,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
         }
     }
 
-    return IS_REACT_NATIVE ? response.url : response.filePath;
+    return apis.IS_REACT_NATIVE_ENV ? response.url : response.filePath;
 }
 
 /**
@@ -924,7 +926,7 @@ export async function getModelJSON(modelPath, fileName, fatal = true, options = 
         return {}
     }
 
-    if (IS_REACT_NATIVE) return JSON.parse(Buffer.from(buffer));
+    if (apis.IS_REACT_NATIVE_ENV) return JSON.parse(Buffer.from(buffer));
 
     let decoder = new TextDecoder('utf-8');
     let jsonData = decoder.decode(buffer);
@@ -939,7 +941,7 @@ export async function getModelJSON(modelPath, fileName, fatal = true, options = 
  * @returns {Promise<Uint8Array>} A Promise that resolves with the Uint8Array buffer
  */
 async function readResponse(response, progress_callback) {
-    if (IS_REACT_NATIVE) {
+    if (apis.IS_REACT_NATIVE_ENV) {
         return await response.arrayBuffer();
     }
 

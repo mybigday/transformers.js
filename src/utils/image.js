@@ -76,7 +76,7 @@ if (IS_REACT_NATIVE) {
         const metadata = await img.metadata();
         const rawChannels = metadata.channels;
 
-        let { data, info } = await img.rotate().raw().toBuffer({ resolveWithObject: true });
+        const { data, info } = await img.rotate().raw().toBuffer({ resolveWithObject: true });
 
         const newImage = new RawImage(new Uint8ClampedArray(data), info.width, info.height, info.channels);
         if (rawChannels !== undefined && rawChannels !== info.channels) {
@@ -162,6 +162,20 @@ export class RawImage {
         }
     }
 
+    /**
+     * Read an image from a canvas.
+     * @param {HTMLCanvasElement|OffscreenCanvas} canvas The canvas to read the image from.
+     * @returns {RawImage} The image object.
+     */
+    static fromCanvas(canvas) {
+        if (!BROWSER_ENV) {
+            throw new Error('fromCanvas() is only supported in browser environments.')
+        }
+
+        const ctx = canvas.getContext('2d');
+        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        return new RawImage(data, canvas.width, canvas.height, 4);
+    }
 
     /**
      * Read an image from a URL or file path.
@@ -177,11 +191,11 @@ export class RawImage {
                 return this.fromBlob(response);
             }
         } else {
-            let response = await getFile(url);
+            const response = await getFile(url);
             if (response.status !== 200) {
                 throw new Error(`Unable to read image from "${url}" (${response.status} ${response.statusText})`);
             }
-            let blob = await response.blob();
+            const blob = await response.blob();
             return this.fromBlob(blob);
         }
     }
@@ -198,7 +212,7 @@ export class RawImage {
             return new RawImage(new Uint8ClampedArray(data), width, height, 4);
         } else if (BROWSER_ENV) {
             // Running in environment with canvas
-            let img = await loadImageFunction(blob);
+            const img = await loadImageFunction(blob);
 
             const ctx = createCanvasFunction(img.width, img.height).getContext('2d');
 
@@ -209,7 +223,7 @@ export class RawImage {
 
         } else {
             // Use sharp.js to read (and possible resize) the image.
-            let img = sharp(await blob.arrayBuffer());
+            const img = sharp(await blob.arrayBuffer());
 
             return await loadImageFunction(img);
         }
@@ -254,7 +268,7 @@ export class RawImage {
             return this;
         }
 
-        let newData = new Uint8ClampedArray(this.width * this.height * 1);
+        const newData = new Uint8ClampedArray(this.width * this.height * 1);
         switch (this.channels) {
             case 3: // rgb to grayscale
             case 4: // rgba to grayscale
@@ -281,7 +295,7 @@ export class RawImage {
             return this;
         }
 
-        let newData = new Uint8ClampedArray(this.width * this.height * 3);
+        const newData = new Uint8ClampedArray(this.width * this.height * 3);
 
         switch (this.channels) {
             case 1: // grayscale to rgb
@@ -314,7 +328,7 @@ export class RawImage {
             return this;
         }
 
-        let newData = new Uint8ClampedArray(this.width * this.height * 4);
+        const newData = new Uint8ClampedArray(this.width * this.height * 4);
 
         switch (this.channels) {
             case 1: // grayscale to rgba
@@ -392,10 +406,10 @@ export class RawImage {
             // TODO use `resample` in browser environment
 
             // Store number of channels before resizing
-            let numChannels = this.channels;
+            const numChannels = this.channels;
 
             // Create canvas object for this image
-            let canvas = this.toCanvas();
+            const canvas = this.toCanvas();
 
             // Actually perform resizing using the canvas API
             const ctx = createCanvasFunction(width, height).getContext('2d');
@@ -404,7 +418,7 @@ export class RawImage {
             ctx.drawImage(canvas, 0, 0, width, height);
 
             // Create image from the resized data
-            let resizedImage = new RawImage(ctx.getImageData(0, 0, width, height).data, width, height, 4);
+            const resizedImage = new RawImage(ctx.getImageData(0, 0, width, height).data, width, height, 4);
 
             // Convert back so that image has the same number of channels as before
             return resizedImage.convert(numChannels);
@@ -494,13 +508,13 @@ export class RawImage {
 
         } else if (BROWSER_ENV) {
             // Store number of channels before padding
-            let numChannels = this.channels;
+            const numChannels = this.channels;
 
             // Create canvas object for this image
-            let canvas = this.toCanvas();
+            const canvas = this.toCanvas();
 
-            let newWidth = this.width + left + right;
-            let newHeight = this.height + top + bottom;
+            const newWidth = this.width + left + right;
+            const newHeight = this.height + top + bottom;
 
             // Create a new canvas of the desired size.
             const ctx = createCanvasFunction(newWidth, newHeight).getContext('2d');
@@ -512,7 +526,7 @@ export class RawImage {
             );
 
             // Create image from the padded data
-            let paddedImage = new RawImage(
+            const paddedImage = new RawImage(
                 ctx.getImageData(0, 0, newWidth, newHeight).data,
                 newWidth, newHeight, 4);
 
@@ -520,7 +534,7 @@ export class RawImage {
             return paddedImage.convert(numChannels);
 
         } else {
-            let img = this.toSharp().extend({ left, right, top, bottom });
+            const img = this.toSharp().extend({ left, right, top, bottom });
             return await loadImageFunction(img);
         }
     }
@@ -611,8 +625,8 @@ export class RawImage {
         }
 
         // Determine bounds of the image in the new canvas
-        let width_offset = (this.width - crop_width) / 2;
-        let height_offset = (this.height - crop_height) / 2;
+        const width_offset = (this.width - crop_width) / 2;
+        const height_offset = (this.height - crop_height) / 2;
 
         if (IS_REACT_NATIVE) {
             return this.crop([
@@ -622,10 +636,10 @@ export class RawImage {
 
         } else if (BROWSER_ENV) {
             // Store number of channels before resizing
-            let numChannels = this.channels;
+            const numChannels = this.channels;
 
             // Create canvas object for this image
-            let canvas = this.toCanvas();
+            const canvas = this.toCanvas();
 
             // Create a new canvas of the desired size. This is needed since if the 
             // image is too small, we need to pad it with black pixels.
@@ -655,7 +669,7 @@ export class RawImage {
             );
 
             // Create image from the resized data
-            let resizedImage = new RawImage(ctx.getImageData(0, 0, crop_width, crop_height).data, crop_width, crop_height, 4);
+            const resizedImage = new RawImage(ctx.getImageData(0, 0, crop_width, crop_height).data, crop_width, crop_height, 4);
 
             // Convert back so that image has the same number of channels as before
             return resizedImage.convert(numChannels);
@@ -675,8 +689,8 @@ export class RawImage {
             } else if (width_offset <= 0 && height_offset <= 0) {
                 // Cropped image lies entirely outside the original image,
                 // so we add padding
-                let top = Math.floor(-height_offset);
-                let left = Math.floor(-width_offset);
+                const top = Math.floor(-height_offset);
+                const left = Math.floor(-width_offset);
                 img = img.extend({
                     top: top,
                     left: left,
@@ -767,13 +781,13 @@ export class RawImage {
 
         // Clone, and convert data to RGBA before drawing to canvas.
         // This is because the canvas API only supports RGBA
-        let cloned = this.clone().rgba();
+        const cloned = this.clone().rgba();
 
         // Create canvas object for the cloned image
-        let clonedCanvas = createCanvasFunction(cloned.width, cloned.height);
+        const clonedCanvas = createCanvasFunction(cloned.width, cloned.height);
 
         // Draw image to context
-        let data = new ImageDataClass(cloned.data, cloned.width, cloned.height);
+        const data = new ImageDataClass(cloned.data, cloned.width, cloned.height);
         clonedCanvas.getContext('2d').putImageData(data, 0, 0);
 
         return clonedCanvas;
