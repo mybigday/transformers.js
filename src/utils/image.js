@@ -1,17 +1,16 @@
 
 /**
- * @file Helper module for image processing. 
- * 
- * These functions and classes are only used internally, 
+ * @file Helper module for image processing.
+ *
+ * These functions and classes are only used internally,
  * meaning an end-user shouldn't need to access anything here.
- * 
+ *
  * @module utils/image
  */
 
-import fs from 'fs';
+import { isNullishDimension } from './core.js';
 import { getFile } from './hub.js';
-import { env } from '../env.js';
-import { permute_data, interpolate_data } from './maths.js';
+import { env, apis } from '../env.js';
 import { Tensor } from './tensor.js';
 
 import * as codecs from 'image-codecs';
@@ -19,15 +18,13 @@ import { Buffer } from 'buffer';
 
 // Will be empty (or not used) if running in browser or web-worker
 import sharp from 'sharp';
-
-const BROWSER_ENV = typeof self !== 'undefined';
-const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
-const WEBWORKER_ENV = BROWSER_ENV && self.constructor.name === 'DedicatedWorkerGlobalScope';
+import fs from 'fs';
 
 let createCanvasFunction;
 let ImageDataClass;
 let loadImageFunction;
-if (IS_REACT_NATIVE) {
+const IS_BROWSER_OR_WEBWORKER = apis.IS_BROWSER_ENV || apis.IS_WEBWORKER_ENV;
+if (apis.IS_REACT_NATIVE_ENV) {
     // Optional Support gcanvas or skia with web polyfill for better performance
     const offscreenCanvasExists = typeof OffscreenCanvas !== 'undefined';
     if (typeof Image !== 'undefined' && (typeof document !== 'undefined' || offscreenCanvasExists)) {
@@ -58,7 +55,7 @@ if (IS_REACT_NATIVE) {
             });
         ImageDataClass = global.ImageData;
     }
-} else if (BROWSER_ENV) {
+} else if (IS_BROWSER_OR_WEBWORKER) {
     // Running in browser or web-worker
     createCanvasFunction = (/** @type {number} */ width, /** @type {number} */ height) => {
         if (!self.OffscreenCanvas) {
@@ -128,7 +125,7 @@ export class RawImage {
         this.channels = channels;
     }
 
-    /** 
+    /**
      * Returns the size of the image (width, height).
      * @returns {[number, number]} The size of the image (width, height).
      */
@@ -138,9 +135,9 @@ export class RawImage {
 
     /**
      * Helper method for reading an image from a variety of input types.
-     * @param {RawImage|string|URL} input 
+     * @param {RawImage|string|URL} input
      * @returns The image object.
-     * 
+     *
      * **Example:** Read image from a URL.
      * ```javascript
      * let image = await RawImage.read('https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/football-match.jpg');
@@ -168,7 +165,7 @@ export class RawImage {
      * @returns {RawImage} The image object.
      */
     static fromCanvas(canvas) {
-        if (!BROWSER_ENV) {
+        if (!IS_BROWSER_OR_WEBWORKER) {
             throw new Error('fromCanvas() is only supported in browser environments.')
         }
 
@@ -210,7 +207,7 @@ export class RawImage {
             const buffer = await blob.arrayBuffer();
             const { data, width, height } = codecs.decode(Buffer.from(buffer));
             return new RawImage(new Uint8ClampedArray(data), width, height, 4);
-        } else if (BROWSER_ENV) {
+        } else if (IS_BROWSER_OR_WEBWORKER) {
             // Running in environment with canvas
             const img = await loadImageFunction(blob);
 
@@ -231,7 +228,7 @@ export class RawImage {
 
     /**
      * Helper method to create a new Image from a tensor
-     * @param {Tensor} tensor 
+     * @param {Tensor} tensor
      */
     static fromTensor(tensor, channel_format = 'CHW') {
         if (tensor.dims.length !== 3) {
@@ -355,9 +352,49 @@ export class RawImage {
     }
 
     /**
+     * Apply an alpha mask to the image. Operates in place.
+     * @param {RawImage} mask The mask to apply. It should have a single channel.
+     * @returns {RawImage} The masked image.
+     * @throws {Error} If the mask is not the same size as the image.
+     * @throws {Error} If the image does not have 4 channels.
+     * @throws {Error} If the mask is not a single channel.
+     */
+    putAlpha(mask) {
+        if (mask.width !== this.width || mask.height !== this.height) {
+            throw new Error(`Expected mask size to be ${this.width}x${this.height}, but got ${mask.width}x${mask.height}`);
+        }
+        if (mask.channels !== 1) {
+            throw new Error(`Expected mask to have 1 channel, but got ${mask.channels}`);
+        }
+
+        const this_data = this.data;
+        const mask_data = mask.data;
+        const num_pixels = this.width * this.height;
+        if (this.channels === 3) {
+            // Convert to RGBA and simultaneously apply mask to alpha channel
+            const newData = new Uint8ClampedArray(num_pixels * 4);
+            for (let i = 0, in_offset = 0, out_offset = 0; i < num_pixels; ++i) {
+                newData[out_offset++] = this_data[in_offset++];
+                newData[out_offset++] = this_data[in_offset++];
+                newData[out_offset++] = this_data[in_offset++];
+                newData[out_offset++] = mask_data[i];
+            }
+            return this._update(newData, this.width, this.height, 4);
+
+        } else if (this.channels === 4) {
+            // Apply mask to alpha channel in place
+            for (let i = 0; i < num_pixels; ++i) {
+                this_data[4 * i + 3] = mask_data[i];
+            }
+            return this;
+        }
+        throw new Error(`Expected image to have 3 or 4 channels, but got ${this.channels}`);
+    }
+
+    /**
      * Resize the image to the given dimensions. This method uses the canvas API to perform the resizing.
-     * @param {number} width The width of the new image.
-     * @param {number} height The height of the new image.
+     * @param {number} width The width of the new image. `null` or `-1` will preserve the aspect ratio.
+     * @param {number} height The height of the new image. `null` or `-1` will preserve the aspect ratio.
      * @param {Object} options Additional options for resizing.
      * @param {0|1|2|3|4|5|string} [options.resample] The resampling method to use.
      * @returns {Promise<RawImage>} `this` to support chaining.
@@ -366,8 +403,27 @@ export class RawImage {
         resample = 2,
     } = {}) {
 
+        // Do nothing if the image already has the desired size
+        if (this.width === width && this.height === height) {
+            return this;
+        }
+
         // Ensure resample method is a string
         let resampleMethod = RESAMPLING_MAPPING[resample] ?? resample;
+
+        // Calculate width / height to maintain aspect ratio, in the event that
+        // the user passed a null value in.
+        // This allows users to pass in something like `resize(320, null)` to
+        // resize to 320 width, but maintain aspect ratio.
+        const nullish_width = isNullishDimension(width);
+        const nullish_height = isNullishDimension(height);
+        if (nullish_width && nullish_height) {
+            return this;
+        } else if (nullish_width) {
+            width = (height / this.height) * this.width;
+        } else if (nullish_height) {
+            height = (width / this.width) * this.height;
+        }
 
         if (IS_REACT_NATIVE) {
             if (createCanvasFunction !== undefined && env.rnUseCanvas) {
@@ -402,7 +458,7 @@ export class RawImage {
                 );
                 return new RawImage(newData, width, height, this.channels);
             }
-        } else if (BROWSER_ENV) {
+        } else if (IS_BROWSER_OR_WEBWORKER) {
             // TODO use `resample` in browser environment
 
             // Store number of channels before resizing
@@ -438,7 +494,7 @@ export class RawImage {
                 case 'nearest':
                 case 'bilinear':
                 case 'bicubic':
-                    // Perform resizing using affine transform. 
+                    // Perform resizing using affine transform.
                     // This matches how the python Pillow library does it.
                     img = img.affine([width / this.width, 0, 0, height / this.height], {
                         interpolator: resampleMethod
@@ -451,7 +507,7 @@ export class RawImage {
                     img = img.resize({
                         width, height,
                         fit: 'fill',
-                        kernel: 'lanczos3', // PIL Lanczos uses a kernel size of 3 
+                        kernel: 'lanczos3', // PIL Lanczos uses a kernel size of 3
                     });
                     break;
 
@@ -506,7 +562,7 @@ export class RawImage {
                 return new RawImage(paddedData, width, height, channels);
             }
 
-        } else if (BROWSER_ENV) {
+        } else if (IS_BROWSER_OR_WEBWORKER) {
             // Store number of channels before padding
             const numChannels = this.channels;
 
@@ -522,13 +578,14 @@ export class RawImage {
             // Draw image to context, padding in the process
             ctx.drawImage(canvas,
                 0, 0, this.width, this.height,
-                left, top, newWidth, newHeight
+                left, top, this.width, this.height
             );
 
             // Create image from the padded data
             const paddedImage = new RawImage(
                 ctx.getImageData(0, 0, newWidth, newHeight).data,
-                newWidth, newHeight, 4);
+                newWidth, newHeight, 4
+            );
 
             // Convert back so that image has the same number of channels as before
             return paddedImage.convert(numChannels);
@@ -581,14 +638,14 @@ export class RawImage {
                 return new RawImage(croppedData, crop_width, crop_height, channels);
             }
 
-        } else if (BROWSER_ENV) {
+        } else if (IS_BROWSER_OR_WEBWORKER) {
             // Store number of channels before resizing
             const numChannels = this.channels;
 
             // Create canvas object for this image
             const canvas = this.toCanvas();
 
-            // Create a new canvas of the desired size. This is needed since if the 
+            // Create a new canvas of the desired size. This is needed since if the
             // image is too small, we need to pad it with black pixels.
             const ctx = createCanvasFunction(crop_width, crop_height).getContext('2d');
 
@@ -634,14 +691,14 @@ export class RawImage {
                 width_offset + crop_width - 1, height_offset + crop_height - 1
             ]);
 
-        } else if (BROWSER_ENV) {
+        } else if (IS_BROWSER_OR_WEBWORKER) {
             // Store number of channels before resizing
             const numChannels = this.channels;
 
             // Create canvas object for this image
             const canvas = this.toCanvas();
 
-            // Create a new canvas of the desired size. This is needed since if the 
+            // Create a new canvas of the desired size. This is needed since if the
             // image is too small, we need to pad it with black pixels.
             const ctx = createCanvasFunction(crop_width, crop_height).getContext('2d');
 
@@ -749,7 +806,7 @@ export class RawImage {
     }
 
     async toBlob(type = 'image/png', quality = 1) {
-        if (!BROWSER_ENV) {
+        if (!IS_BROWSER_OR_WEBWORKER) {
             throw new Error('toBlob() is only supported in browser environments.')
         }
 
@@ -775,7 +832,7 @@ export class RawImage {
     }
 
     toCanvas() {
-        if (!createCanvasFunction) {
+        if (!IS_BROWSER_OR_WEBWORKER || !createCanvasFunction) {
             throw new Error('toCanvas() is only supported in browser environments.')
         }
 
@@ -791,6 +848,36 @@ export class RawImage {
         clonedCanvas.getContext('2d').putImageData(data, 0, 0);
 
         return clonedCanvas;
+    }
+
+    /**
+     * Split this image into individual bands. This method returns an array of individual image bands from an image.
+     * For example, splitting an "RGB" image creates three new images each containing a copy of one of the original bands (red, green, blue).
+     * 
+     * Inspired by PIL's `Image.split()` [function](https://pillow.readthedocs.io/en/latest/reference/Image.html#PIL.Image.Image.split).
+     * @returns {RawImage[]} An array containing bands.
+     */
+    split() {
+        const { data, width, height, channels } = this;
+
+        /** @type {typeof Uint8Array | typeof Uint8ClampedArray} */
+        const data_type = /** @type {any} */(data.constructor);
+        const per_channel_length = data.length / channels;
+
+        // Pre-allocate buffers for each channel
+        const split_data = Array.from(
+            { length: channels },
+            () => new data_type(per_channel_length),
+        );
+
+        // Write pixel data
+        for (let i = 0; i < per_channel_length; ++i) {
+            const data_offset = channels * i;
+            for (let j = 0; j < channels; ++j) {
+                split_data[j][i] = data[data_offset + j];
+            }
+        }
+        return split_data.map((data) => new RawImage(data, width, height, 1));
     }
 
     /**
@@ -854,8 +941,8 @@ export class RawImage {
         if (IS_REACT_NATIVE) {
             const buf = Buffer.from(codecs.encode(this.rgba().data, mime));
             await fs.writeFile(path, buf.toString('base64'), 'base64');
-        } else if (BROWSER_ENV) {
-            if (WEBWORKER_ENV) {
+        if (IS_BROWSER_OR_WEBWORKER) {
+            if (apis.IS_WEBWORKER_ENV) {
                 throw new Error('Unable to save an image from a Web Worker.')
             }
 
@@ -891,7 +978,7 @@ export class RawImage {
     }
 
     toSharp() {
-        if (BROWSER_ENV || IS_REACT_NATIVE) {
+        if (IS_BROWSER_OR_WEBWORKER || IS_REACT_NATIVE) {
             throw new Error('toSharp() is only supported in server-side environments.')
         }
 
@@ -904,3 +991,8 @@ export class RawImage {
         });
     }
 }
+
+/**
+ * Helper function to load an image from a URL, path, etc.
+ */
+export const load_image = RawImage.read.bind(RawImage);

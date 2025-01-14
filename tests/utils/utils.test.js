@@ -1,5 +1,6 @@
 import { AutoProcessor, hamming, hanning, mel_filter_bank } from "../../src/transformers.js";
 import { getFile } from "../../src/utils/hub.js";
+import { RawImage } from "../../src/utils/image.js";
 
 import { MAX_TEST_EXECUTION_TIME } from "../init.js";
 import { compare } from "../test_utils.js";
@@ -57,6 +58,63 @@ describe("Utilities", () => {
       const blobUrl = URL.createObjectURL(blob);
       const data = await getFile(blobUrl);
       expect(await data.text()).toBe("Hello, world!");
+    });
+  });
+
+  describe("Image utilities", () => {
+    const [width, height, channels] = [2, 2, 3];
+    const data = Uint8Array.from({ length: width * height * channels }, (_, i) => i % 5);
+    const tiny_image = new RawImage(data, width, height, channels);
+
+    let image;
+    beforeAll(async () => {
+      image = await RawImage.fromURL("https://picsum.photos/300/200");
+    });
+
+    it("Can split image into separate channels", async () => {
+      const image_data = tiny_image.split().map((x) => x.data);
+
+      const target = [
+        new Uint8Array([0, 3, 1, 4]), // Reds
+        new Uint8Array([1, 4, 2, 0]), // Greens
+        new Uint8Array([2, 0, 3, 1]), // Blues
+      ];
+
+      compare(image_data, target);
+    });
+
+    it("Can splits channels for grayscale", async () => {
+      const image_data = tiny_image
+        .grayscale()
+        .split()
+        .map((x) => x.data);
+      const target = [new Uint8Array([1, 3, 2, 1])];
+
+      compare(image_data, target);
+    });
+
+    it("Read image from URL", async () => {
+      expect(image.width).toBe(300);
+      expect(image.height).toBe(200);
+      expect(image.channels).toBe(3);
+    });
+
+    it("Can resize image", async () => {
+      const resized = await image.resize(150, 100);
+      expect(resized.width).toBe(150);
+      expect(resized.height).toBe(100);
+    });
+
+    it("Can resize with aspect ratio", async () => {
+      const resized = await image.resize(150, null);
+      expect(resized.width).toBe(150);
+      expect(resized.height).toBe(100);
+    });
+
+    it("Returns original image if width and height are null", async () => {
+      const resized = await image.resize(null, null);
+      expect(resized.width).toBe(300);
+      expect(resized.height).toBe(200);
     });
   });
 });

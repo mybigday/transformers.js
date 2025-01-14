@@ -1,3 +1,5 @@
+/// <reference types="@webgpu/types" />
+
 import { apis } from "../env.js";
 
 import { DEVICE_TYPES } from "./devices.js";
@@ -31,6 +33,7 @@ export const isWebGpuFp16Supported = (function () {
 })();
 
 export const DATA_TYPES = Object.freeze({
+    auto: 'auto', // Auto-detect based on environment
     fp32: 'fp32',
     fp16: 'fp16',
     q8: 'q8',
@@ -47,7 +50,7 @@ export const DEFAULT_DEVICE_DTYPE_MAPPING = Object.freeze({
     [DEVICE_TYPES.wasm]: DATA_TYPES.q8,
 });
 
-/** @type {Record<DataType, string>} */
+/** @type {Record<Exclude<DataType, "auto">, string>} */
 export const DEFAULT_DTYPE_SUFFIX_MAPPING = Object.freeze({
     [DATA_TYPES.fp32]: '',
     [DATA_TYPES.fp16]: '_fp16',

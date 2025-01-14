@@ -45,8 +45,10 @@ import {
 } from './models.js';
 import {
     AutoProcessor,
-    Processor
-} from './processors.js';
+} from './models/auto/processing_auto.js';
+import {
+    Processor,
+} from './base/processing_utils.js';
 
 import {
     Callable,
@@ -54,7 +56,6 @@ import {
 
 import {
     dispatchCallback,
-    pop,
     product,
 } from './utils/core.js';
 import {
@@ -68,7 +69,7 @@ import {
 import {
     Tensor,
     mean_pooling,
-    interpolate,
+    interpolate_4d,
     quantize_embeddings,
     topk,
 } from './utils/tensor.js';
@@ -161,7 +162,6 @@ function get_bounding_box(box, asInteger) {
 /**
  * The Pipeline class is the class from which all pipelines inherit.
  * Refer to this class for methods shared across different pipelines.
- * @extends Callable
  */
 export class Pipeline extends Callable {
     /**
@@ -297,6 +297,7 @@ export class TextClassificationPipeline extends (/** @type {new (options: TextPi
 
         // TODO: Use softmax tensor function
         const function_to_apply =
+            // @ts-expect-error TS2339
             this.model.config.problem_type === 'multi_label_classification'
                 ? batch => batch.sigmoid()
                 : batch => new Tensor(
@@ -305,6 +306,7 @@ export class TextClassificationPipeline extends (/** @type {new (options: TextPi
                     batch.dims,
                 ); // single_label_classification (default)
 
+        // @ts-expect-error TS2339
         const id2label = this.model.config.id2label;
 
         const toReturn = [];
@@ -407,6 +409,7 @@ export class TokenClassificationPipeline extends (/** @type {new (options: TextP
         const outputs = await this.model(model_inputs)
 
         const logits = outputs.logits;
+        // @ts-expect-error TS2339
         const id2label = this.model.config.id2label;
 
         const toReturn = [];
@@ -691,7 +694,7 @@ export class FillMaskPipeline extends (/** @type {new (options: TextPipelineCons
                 return {
                     score: values[i],
                     token: Number(x),
-                    token_str: this.tokenizer.model.vocab[x],
+                    token_str: this.tokenizer.decode([x]),
                     sequence: this.tokenizer.decode(sequence, { skip_special_tokens: true }),
                 }
             }));
@@ -746,11 +749,14 @@ export class Text2TextGenerationPipeline extends (/** @type {new (options: TextP
 
 
         // Add global prefix, if present
+        // @ts-expect-error TS2339
         if (this.model.config.prefix) {
+            // @ts-expect-error TS2339
             texts = texts.map(x => this.model.config.prefix + x)
         }
 
         // Handle task specific params:
+        // @ts-expect-error TS2339
         const task_specific_params = this.model.config.task_specific_params
         if (task_specific_params && task_specific_params[this.task]) {
             // Add prefixes, if present
@@ -1489,6 +1495,7 @@ export class AudioClassificationPipeline extends (/** @type {new (options: Audio
         const sampling_rate = this.processor.feature_extractor.config.sampling_rate;
         const preparedAudios = await prepareAudios(audio, sampling_rate);
 
+        // @ts-expect-error TS2339
         const id2label = this.model.config.id2label;
 
         const toReturn = [];
@@ -1732,6 +1739,8 @@ export class AutomaticSpeechRecognitionPipeline extends (/** @type {new (options
             case 'unispeech-sat':
             case 'hubert':
                 return this._call_wav2vec2(audio, kwargs)
+            case 'moonshine':
+                return this._call_moonshine(audio, kwargs)
             default:
                 throw new Error(`AutomaticSpeechRecognitionPipeline does not support model type '${this.model.config.model_type}'.`)
         }
@@ -1797,6 +1806,7 @@ export class AutomaticSpeechRecognitionPipeline extends (/** @type {new (options
             audio = [/** @type {AudioInput} */ (audio)];
         }
 
+        // @ts-expect-error TS2339
         const time_precision = this.processor.feature_extractor.config.chunk_length / this.model.config.max_source_positions;
         const hop_length = this.processor.feature_extractor.config.hop_length;
 
@@ -1862,7 +1872,9 @@ export class AutomaticSpeechRecognitionPipeline extends (/** @type {new (options
 
                 // TODO: Right now we only get top beam
                 if (return_timestamps === 'word') {
+                    // @ts-expect-error TS2339
                     chunk.tokens = data.sequences.tolist()[0];
+                    // @ts-expect-error TS2339
                     chunk.token_timestamps = data.token_timestamps.tolist()[0].map(
                         (/** @type {number} */ x) => round(x, 2)
                     );
@@ -1885,6 +1897,34 @@ export class AutomaticSpeechRecognitionPipeline extends (/** @type {new (options
         }
         return single ? toReturn[0] : toReturn;
     }
+
+    /**
+     * @type {AutomaticSpeechRecognitionPipelineCallback}
+     * @private
+     */
+    async _call_moonshine(audio, kwargs) {
+        const single = !Array.isArray(audio);
+        if (single) {
+            audio = [/** @type {AudioInput} */ (audio)];
+        }
+        const sampling_rate = this.processor.feature_extractor.config.sampling_rate;
+        const preparedAudios = await prepareAudios(audio, sampling_rate);
+        const toReturn = [];
+        for (const aud of preparedAudios) {
+            const inputs = await this.processor(aud);
+
+            // According to the [paper](https://arxiv.org/pdf/2410.15608):
+            // "We use greedy decoding, with a heuristic limit of 6 output tokens
+            // per second of audio to avoid repeated output sequences."
+            const max_new_tokens = Math.floor(aud.length / sampling_rate) * 6;
+            const outputs = await this.model.generate({ max_new_tokens, ...kwargs, ...inputs });
+
+            const text = this.processor.batch_decode(/** @type {Tensor} */(outputs), { skip_special_tokens: true })[0];
+            toReturn.push({ text });
+        }
+        return single ? toReturn[0] : toReturn;
+    }
+
 }
 
 /**
@@ -2028,6 +2068,7 @@ export class ImageClassificationPipeline extends (/** @type {new (options: Image
         const { pixel_values } = await this.processor(preparedImages);
         const output = await this.model({ pixel_values });
 
+        // @ts-expect-error TS2339
         const id2label = this.model.config.id2label;
 
         /** @type {ImageClassificationOutput[]} */
@@ -2134,14 +2175,15 @@ export class ImageSegmentationPipeline extends (/** @type {new (options: ImagePi
             fn = this.subtasks_mapping[subtask];
         } else {
             for (let [task, func] of Object.entries(this.subtasks_mapping)) {
-                if (func in this.processor.feature_extractor) {
-                    fn = this.processor.feature_extractor[func].bind(this.processor.feature_extractor);
+                if (func in this.processor.image_processor) {
+                    fn = this.processor.image_processor[func].bind(this.processor.image_processor);
                     subtask = task;
                     break;
                 }
             }
         }
 
+        // @ts-expect-error TS2339
         const id2label = this.model.config.id2label;
 
         /** @type {ImageSegmentationPipelineOutput[]} */
@@ -2365,9 +2407,10 @@ export class ObjectDetectionPipeline extends (/** @type {new (options: ImagePipe
         const output = await this.model({ pixel_values, pixel_mask });
 
         // @ts-ignore
-        const processed = this.processor.feature_extractor.post_process_object_detection(output, threshold, imageSizes);
+        const processed = this.processor.image_processor.post_process_object_detection(output, threshold, imageSizes);
 
         // Add labels
+        // @ts-expect-error TS2339
         const id2label = this.model.config.id2label;
 
         // Format output
@@ -2513,7 +2556,7 @@ export class ZeroShotObjectDetectionPipeline extends (/** @type {new (options: T
             const output = await this.model({ ...text_inputs, pixel_values });
 
             // @ts-ignore
-            const processed = this.processor.feature_extractor.post_process_object_detection(output, threshold, imageSize, true)[0];
+            const processed = this.processor.image_processor.post_process_object_detection(output, threshold, imageSize, true)[0];
             let result = processed.boxes.map((box, i) => ({
                 score: processed.scores[i],
                 label: candidate_labels[processed.classes[i]],
@@ -2569,7 +2612,6 @@ export class DocumentQuestionAnsweringPipeline extends (/** @type {new (options:
 
     /** @type {DocumentQuestionAnsweringPipelineCallback} */
     async _call(image, question, generate_kwargs = {}) {
-        throw new Error('This pipeline is not yet supported in Transformers.js v3.'); // TODO: Remove when implemented
 
         // NOTE: For now, we only support a batch size of 1
 
@@ -2588,6 +2630,7 @@ export class DocumentQuestionAnsweringPipeline extends (/** @type {new (options:
         // Run model
         const output = await this.model.generate({
             inputs: pixel_values,
+            // @ts-expect-error TS2339
             max_length: this.model.config.decoder.max_position_embeddings,
             decoder_input_ids,
             ...generate_kwargs,
@@ -2703,6 +2746,7 @@ export class TextToAudioPipeline extends (/** @type {new (options: TextToAudioPi
         // Generate waveform
         const { waveform } = await this.model(inputs);
 
+        // @ts-expect-error TS2339
         const sampling_rate = this.model.config.sampling_rate;
         return {
             audio: waveform.data,
@@ -2860,11 +2904,23 @@ export class DepthEstimationPipeline extends (/** @type {new (options: ImagePipe
 
         const toReturn = [];
         for (let i = 0; i < preparedImages.length; ++i) {
-            const prediction = interpolate(predicted_depth[i], preparedImages[i].size.reverse(), 'bilinear', false);
-            const formatted = prediction.mul_(255 / max(prediction.data)[0]).to('uint8');
+            const batch = predicted_depth[i];
+            const [height, width] = batch.dims.slice(-2);
+            const [new_width, new_height] = preparedImages[i].size;
+
+            // Interpolate to original size
+            const prediction = (await interpolate_4d(batch.view(1, 1, height, width), {
+                size: [new_height, new_width],
+                mode: 'bilinear',
+            })).view(new_height, new_width);
+
+            const minval = /** @type {number} */(prediction.min().item());
+            const maxval = /** @type {number} */(prediction.max().item());
+            const formatted = prediction.sub(minval).div_(maxval - minval).mul_(255).to('uint8').unsqueeze(0);
+            const depth = RawImage.fromTensor(formatted);
             toReturn.push({
-                predicted_depth: predicted_depth[i],
-                depth: RawImage.fromTensor(formatted),
+                predicted_depth: prediction,
+                depth,
             });
         }
 

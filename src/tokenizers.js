@@ -49,10 +49,8 @@ import {
 import { Template } from '@huggingface/jinja';
 
 import {
-    WHISPER_LANGUAGE_MAPPING,
-    whisper_language_to_code,
+    WHISPER_LANGUAGE_MAPPING
 } from './models/whisper/common_whisper.js';
-import { GITHUB_ISSUE_URL } from './utils/constants.js';
 
 /**
  * @typedef {Object} TokenizerProperties Additional tokenizer-specific properties.
@@ -537,7 +535,7 @@ class Unigram extends TokenizerModel {
      * Create a new Unigram tokenizer model.
      * @param {Object} config The configuration object for the Unigram model.
      * @param {number} config.unk_id The ID of the unknown token
-     * @param {any[][]} config.vocab A 2D array representing a mapping of tokens to scores.
+     * @param {[string, number][]} config.vocab A 2D array representing a mapping of tokens to scores.
      * @param {Object} moreConfig Additional configuration object for the Unigram model.
      */
     constructor(config, moreConfig) {
@@ -545,11 +543,10 @@ class Unigram extends TokenizerModel {
 
         const vocabSize = config.vocab.length;
         this.vocab = new Array(vocabSize);
+        /** @type {number[]} */
         this.scores = new Array(vocabSize);
         for (let i = 0; i < vocabSize; ++i) {
-            const piece = config.vocab[i];
-            this.vocab[i] = piece[0];
-            this.scores[i] = piece[1];
+            [this.vocab[i], this.scores[i]] = config.vocab[i];
         }
 
         this.unk_token_id = config.unk_id;
@@ -1520,6 +1517,8 @@ class SplitPreTokenizer extends PreTokenizer {
 
         if (this.config.invert) {
             return text.match(this.pattern) || [];
+        } else if (this.config.behavior?.toLowerCase() === 'removed') {
+            return text.split(this.pattern).filter(x => x);
         } else {
             return regexSplit(text, this.pattern);
         }
@@ -2605,6 +2604,12 @@ export class PreTrainedTokenizer extends Callable {
         this.unk_token = this.getToken('unk_token');
         this.unk_token_id = this.model.tokens_to_ids.get(this.unk_token);
 
+        this.bos_token = this.getToken('bos_token');
+        this.bos_token_id = this.model.tokens_to_ids.get(this.bos_token);
+
+        this.eos_token = this.getToken('eos_token');
+        this.eos_token_id = this.model.tokens_to_ids.get(this.eos_token);
+
         this.model_max_length = tokenizerConfig.model_max_length;
 
         /** @type {boolean} Whether or not to strip the text when tokenizing (removing excess spaces before and after the string). */
@@ -3577,6 +3582,11 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
         let chunk = new_chunk();
         let time_offset = 0.0;
         const timestamp_begin = this.timestamp_begin;
+        // Whisper timestamp tokens start from 0.00 and go to timestamp 30.00 in 0.02 increments. 
+        // We can calculate the last time stamp token as timestamp_begin plus the number of tokens 
+        // tokens from 0.00 to 30.00 which is 1500. 
+        const total_timestamp_tokens = 1500; // (30.00 - 0.00) / 0.02
+        const timestamp_end = timestamp_begin + total_timestamp_tokens;
 
         let previous_tokens = [];
         let previous_token_timestamps = [];
@@ -3664,7 +3674,7 @@ export class WhisperTokenizer extends PreTrainedTokenizer {
                     } else {
                         // 2/ This is a regular special token, ignoring it
                     }
-                } else if (token >= timestamp_begin) {
+                } else if (token >= timestamp_begin && token <= timestamp_end) {
                     // 3/ Timestamp token
                     const time = (token - timestamp_begin) * time_precision + time_offset;
                     const rounded_time = round(time, 2);
@@ -4257,6 +4267,8 @@ export class VitsTokenizer extends PreTrainedTokenizer {
 
 export class CohereTokenizer extends PreTrainedTokenizer { }
 
+export class MgpstrTokenizer extends PreTrainedTokenizer { }
+
 /**
  * Helper class which is used to instantiate pretrained tokenizers with the `from_pretrained` function.
  * The chosen tokenizer class is determined by the type specified in the tokenizer config.
@@ -4310,6 +4322,7 @@ export class AutoTokenizer {
         GemmaTokenizer,
         Grok1Tokenizer,
         CohereTokenizer,
+        MgpstrTokenizer,
 
         // Base case:
         PreTrainedTokenizer,

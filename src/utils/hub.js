@@ -16,7 +16,7 @@ import { dispatchCallback } from './core.js';
 
 /**
  * @typedef {Object} PretrainedOptions Options for loading a pretrained model.     
- * @property {function} [progress_callback=null] If specified, this function will be called during model construction, to provide the user with progress updates.
+ * @property {import('./core.js').ProgressCallback} [progress_callback=null] If specified, this function will be called during model construction, to provide the user with progress updates.
  * @property {import('../configs.js').PretrainedConfig} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
  * - The model is a model provided by the library (loaded with the *model id* string of a pretrained model).
  * - The model is loaded by supplying a local directory as `pretrained_model_name_or_path` and a configuration JSON file named *config.json* is found in the directory.
@@ -159,7 +159,7 @@ class FileResponse {
             return Buffer.from(await fs.readFile(this.url, 'base64'), 'base64').buffer;
         } else {
             const data = await fs.promises.readFile(this.filePath);
-            return data.buffer;
+            return /** @type {ArrayBuffer} */ (data.buffer);
         }
     }
 
@@ -688,13 +688,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
         name: path_or_repo_id,
         file: filename
     })
-  
-    const progressInfo = {
-        status: 'progress',
-        name: path_or_repo_id,
-        file: filename
-    }
-    
+
     /** @type {Uint8Array} */
     let buffer;
 
@@ -714,7 +708,9 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
 
         // For completeness, we still fire the final progress callback
         dispatchCallback(options.progress_callback, {
-            ...progressInfo,
+            status: 'progress',
+            name: path_or_repo_id,
+            file: filename,
             progress: 100,
             loaded: buffer.length,
             total: buffer.length,
@@ -722,7 +718,9 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
     } else {
         buffer = await readResponse(response, data => {
             dispatchCallback(options.progress_callback, {
-                ...progressInfo,
+                status: 'progress',
+                name: path_or_repo_id,
+                file: filename,
                 ...data,
             })
         })
@@ -879,17 +877,13 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
                 name: path_or_repo_id,
                 file: filename
             })
-        
-            const progressInfo = {
-                status: 'progress',
-                name: path_or_repo_id,
-                file: filename
-            }
 
             const cachePath = path.join(options.cache_dir ?? env.cacheDir, proposedCacheKey);
             await downloadFile(remoteURL, cachePath, data => {
                 dispatchCallback(options.progress_callback, {
-                    ...progressInfo,
+                    status: 'progress',
+                    name: path_or_repo_id,
+                    file: filename
                     ...data,
                 })
             });
@@ -932,12 +926,11 @@ export async function getModelJSON(modelPath, fileName, fatal = true, options = 
     let jsonData = decoder.decode(buffer);
     return JSON.parse(jsonData);
 }
-
 /**
  * Read and track progress when reading a Response object
  *
- * @param {any} response The Response object to read
- * @param {function} progress_callback The function to call with progress updates
+ * @param {Response|FileResponse} response The Response object to read
+ * @param {(data: {progress: number, loaded: number, total: number}) => void} progress_callback The function to call with progress updates
  * @returns {Promise<Uint8Array>} A Promise that resolves with the Uint8Array buffer
  */
 async function readResponse(response, progress_callback) {

@@ -1,7 +1,7 @@
 from enum import Enum
 
 from tqdm import tqdm
-from typing import Set
+from typing import Set, List, Optional
 import onnx
 import os
 
@@ -36,6 +36,27 @@ QUANTIZE_SUFFIX_MAPPING = {
 
 QUANTIZE_OPTIONS = tuple(x.value for x in QuantMode)
 
+# A list of operators that, when detected in a model, should select QUInt8 as the weight type for 8-bit quantization.
+QUINT8_OPS = (
+    # NOTE:
+    # As of 2024/11/29, the latest version of onnxruntime-web is 1.20.1, and does not support INT8 weights for Conv layers.
+    # If you attempt to run a model with INT8 weights for Conv layers, you will get an error like:
+    # `Can't create a session. ERROR_CODE: 9, ERROR_MESSAGE: Could not find an implementation for ConvInteger(10) node with name '/.../Conv_quant'`
+    #
+    # For this reason, we choose model weight types to ensure compatibility with onnxruntime-web.
+    #
+    # As per docs, signed weight type (QInt8) is faster on most CPUs, so, we use that unless the model contains a Conv layer.
+    # For more information, see:
+    #  - https://github.com/microsoft/onnxruntime/issues/3130#issuecomment-1105200621
+    #  - https://github.com/microsoft/onnxruntime/issues/2339
+    "Conv",
+
+    # Models produced by onnxruntime-genai contain optimized operators that perform better with QUInt8 weights.
+    "GroupQueryAttention",
+    "MultiHeadAttention",
+
+    # TODO: "SimplifiedLayerNormalization", "SkipSimplifiedLayerNormalization"
+)
 
 @dataclass
 class IOArguments:
@@ -110,6 +131,16 @@ class QuantizationArguments:
         },
     )
 
+    op_block_list: List[str] = field(
+        default=None,
+        metadata={
+            "help": "List of operators to exclude from quantization."
+            "Can be any standard ONNX operator (see https://onnx.ai/onnx/operators/)"
+            "or your custom implemented operators.",
+            "nargs": "+",
+        },
+    )
+
 
 def get_operators(model: onnx.ModelProto) -> Set[str]:
     operators = set()
@@ -131,6 +162,7 @@ def quantize_q8(
     per_channel: bool,
     reduce_range: bool,
     weight_type: QuantType,
+    op_block_list: Optional[List[str]]
 ):
     """
     Quantize the weights of the model from float32 to int8/uint8
@@ -139,6 +171,10 @@ def quantize_q8(
     https://onnxruntime.ai/docs/performance/quantization.html#data-type-selection
     it is faster on most CPU architectures
     """
+
+    op_types_to_quantize = set(IntegerOpsRegistry.keys())
+    if op_block_list is not None:
+        op_types_to_quantize.difference_update(op_block_list)
 
     quantizer = ONNXQuantizer(
         model,
@@ -151,7 +187,7 @@ def quantize_q8(
         tensors_range=None,
         nodes_to_quantize=[],
         nodes_to_exclude=[],
-        op_types_to_quantize=list(IntegerOpsRegistry.keys()),
+        op_types_to_quantize=op_types_to_quantize,
         extra_options=dict(
             EnableSubgraph=True,
             MatMulConstBOnly=True,
@@ -165,6 +201,7 @@ def quantize_q8(
 def quantize_fp16(
     model: onnx.ModelProto,
     save_path: str,
+    op_block_list: Optional[List[str]]
 ):
     """
     Quantize the weights of the model from float32 to float16
@@ -174,10 +211,15 @@ def quantize_fp16(
     # ValueError: Message onnx.ModelProto exceeds maximum protobuf size of 2GB: 2338583841
     disable_shape_infer = model.ByteSize() >= onnx.checker.MAXIMUM_PROTOBUF
 
+    blocked_ops = set(float16.DEFAULT_OP_BLOCK_LIST)
+    if op_block_list is not None:
+        blocked_ops.update(op_block_list)
+
     model_fp16 = float16.convert_float_to_float16(
         model,
         keep_io_types=True,
         disable_shape_infer=disable_shape_infer,
+        op_block_list=blocked_ops,
     )
     graph = gs.import_onnx(model_fp16)
     graph.toposort()
@@ -271,6 +313,7 @@ def quantize(input_folder, output_folder, quantization_args: QuantizationArgumen
                 quantize_fp16(
                     model,
                     save_path,
+                    quantization_args.op_block_list
                 )
 
             elif mode in (QuantMode.Q4, QuantMode.Q4F16):
@@ -287,6 +330,7 @@ def quantize(input_folder, output_folder, quantization_args: QuantizationArgumen
                     quantize_fp16(
                         q4_model,
                         save_path,
+                        quantization_args.op_block_list,
                     )
 
             elif mode == QuantMode.BNB4:
@@ -303,20 +347,11 @@ def quantize(input_folder, output_folder, quantization_args: QuantizationArgumen
 
             elif mode in (QuantMode.Q8, QuantMode.QI8, QuantMode.QU8):
                 if mode == QuantMode.Q8:
-                    # NOTE:
-                    # As of 2024/06/28, the current latest version of onnxruntime-web is 1.18.0, and does not support INT8 weights for Conv layers.
-                    # If you attempt to run a model with INT8 weights for Conv layers, you will get an error like:
-                    # `Can't create a session. ERROR_CODE: 9, ERROR_MESSAGE: Could not find an implementation for ConvInteger(10) node with name '/.../Conv_quant'`
-                    #
-                    # For this reason, we choose model weight types to ensure compatibility with onnxruntime-web.
-                    #
-                    # As per docs, signed weight type (QInt8) is faster on most CPUs, so, we use that unless the model contains a Conv layer.
-                    # For more information, see:
-                    #  - https://github.com/microsoft/onnxruntime/issues/3130#issuecomment-1105200621
-                    #  - https://github.com/microsoft/onnxruntime/issues/2339
                     op_types = get_operators(model)
                     weight_type = (
-                        QuantType.QUInt8 if "Conv" in op_types else QuantType.QInt8
+                        QuantType.QUInt8
+                        if any(x in QUINT8_OPS for x in op_types)
+                        else QuantType.QInt8
                     )
 
                 elif mode == QuantMode.QI8:
@@ -331,6 +366,7 @@ def quantize(input_folder, output_folder, quantization_args: QuantizationArgumen
                     per_channel=quantization_args.per_channel,
                     reduce_range=quantization_args.reduce_range,
                     weight_type=weight_type,
+                    op_block_list=quantization_args.op_block_list,
                 )
 
 

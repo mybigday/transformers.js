@@ -1,5 +1,8 @@
 import { Tensor, cat, mean, stack, layer_norm } from "../../src/transformers.js";
+import { init } from "../init.js";
 import { compare } from "../test_utils.js";
+
+init();
 
 describe("Tensor operations", () => {
   describe("cat", () => {
@@ -49,6 +52,37 @@ describe("Tensor operations", () => {
     });
 
     // TODO add tests for errors
+  });
+
+  describe("slice", () => {
+    it("should return a given row dim", async () => {
+      const t1 = new Tensor("float32", [1, 2, 3, 4, 5, 6], [3, 2]);
+      const t2 = t1.slice(1);
+      const target = new Tensor("float32", [3, 4], [2]);
+
+      compare(t2, target);
+    });
+
+    it("should return a range of rows", async () => {
+      const t1 = new Tensor("float32", [1, 2, 3, 4, 5, 6], [3, 2]);
+      const t2 = t1.slice([1, 3]);
+      const target = new Tensor("float32", [3, 4, 5, 6], [2, 2]);
+
+      compare(t2, target);
+    });
+
+    it("should return a crop", async () => {
+      const t1 = new Tensor(
+        "float32",
+        Array.from({ length: 28 }, (_, i) => i + 1),
+        [4, 7],
+      );
+      const t2 = t1.slice([1, -1], [1, -1]);
+
+      const target = new Tensor("float32", [9, 10, 11, 12, 13, 16, 17, 18, 19, 20], [2, 5]);
+
+      compare(t2, target);
+    });
   });
 
   describe("stack", () => {
@@ -171,6 +205,49 @@ describe("Tensor operations", () => {
 
       const norm = layer_norm(t1, [t1.dims.at(-1)]);
       compare(norm, target, 1e-3);
+    });
+  });
+
+  describe("to", () => {
+    it("float32 to int32 (number to number)", async () => {
+      const t1 = new Tensor("float32", [1, 2, 3, 4, 5, 6], [2, 3]);
+
+      const target = new Tensor("int32", [1, 2, 3, 4, 5, 6], [2, 3]);
+
+      const t2 = t1.to("int32");
+      compare(t2, target);
+    });
+    it("float32 to int64 (number to bigint)", async () => {
+      const t1 = new Tensor("float32", [1, 2, 3, 4, 5, 6], [2, 3]);
+
+      const target = new Tensor("int64", [1n, 2n, 3n, 4n, 5n, 6n], [2, 3]);
+
+      const t2 = t1.to("int64");
+      compare(t2, target);
+    });
+    it("int64 to float32 (bigint to number)", async () => {
+      const t1 = new Tensor("int64", [1n, 2n, 3n, 4n, 5n, 6n], [2, 3]);
+
+      const target = new Tensor("float32", [1, 2, 3, 4, 5, 6], [2, 3]);
+
+      const t2 = t1.to("float32");
+      compare(t2, target);
+    });
+    it("int32 to uint32", async () => {
+      const t1 = new Tensor("int32", [-1, 2, -3, 4, -5, 6], [2, 3]);
+
+      const target = new Tensor("uint32", [4294967295, 2, 4294967293, 4, 4294967291, 6], [2, 3]);
+
+      const t2 = t1.to("uint32");
+      compare(t2, target);
+    });
+    it("int16 to int8 (overflow)", async () => {
+      const t1 = new Tensor("int16", [0, 1, 128, 256, 257, 512], [2, 3]);
+
+      const target = new Tensor("int8", [0, 1, -128, 0, 1, 0], [2, 3]);
+
+      const t2 = t1.to("int8");
+      compare(t2, target);
     });
   });
 });
