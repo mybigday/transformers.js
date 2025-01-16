@@ -8,9 +8,9 @@
  * @module utils/image
  */
 
-import { isNullishDimension } from './core.js';
+import { isNullishDimension, saveBlob } from './core.js';
 import { getFile } from './hub.js';
-import { env, apis } from '../env.js';
+import { apis } from '../env.js';
 import { Tensor } from './tensor.js';
 import { interpolate_data, permute_data } from './maths.js';
 
@@ -953,23 +953,9 @@ export class RawImage {
             // Convert image to Blob
             const blob = await this.toBlob(mime);
 
-            // Convert the canvas content to a data URL
-            const dataURL = URL.createObjectURL(blob);
+            saveBlob(path, blob)
 
-            // Create an anchor element with the data URL as the href attribute
-            const downloadLink = document.createElement('a');
-            downloadLink.href = dataURL;
-
-            // Set the download attribute to specify the desired filename for the downloaded image
-            downloadLink.download = path;
-
-            // Trigger the download
-            downloadLink.click();
-
-            // Clean up: remove the anchor element from the DOM
-            downloadLink.remove();
-
-        } else if (!env.useFS) {
+        } else if (!apis.IS_FS_AVAILABLE) {
             throw new Error('Unable to save the image because filesystem is disabled in this environment.')
 
         } else {
@@ -997,3 +983,4 @@ export class RawImage {
  * Helper function to load an image from a URL, path, etc.
  */
 export const load_image = RawImage.read.bind(RawImage);
+
