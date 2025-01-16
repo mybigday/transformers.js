@@ -77,7 +77,7 @@ class FileResponse {
      * @param {string|URL} filePath
      */
     constructor(filePath) {
-        this.url = String(filePath).startsWith('file://') ? String(filePath) : `file://${filePath}`;
+        this.url = String(filePath).startsWith('file://') ? filePath : `file://${filePath}`;
         this.filePath = filePath;
         this.headers = new Headers();
         this.ok = false;
@@ -90,10 +90,12 @@ class FileResponse {
         let response = new FileResponse(filePath);
         
         if (apis.IS_REACT_NATIVE_ENV) {
+            // @ts-expect-error TS2339
             response.ok = await fs.exists(response.url);
             if (response.ok) {
                 response.status = 200;
                 response.statusText = 'OK';
+                // @ts-expect-error TS2339
                 response.headers.append('content-length', String(await fs.stat(response.url).size));
                 response.headers.append('content-type', getMIME(response.url));
             } else {
@@ -156,6 +158,7 @@ class FileResponse {
      */
     async arrayBuffer() {
         if (apis.IS_REACT_NATIVE_ENV) {
+            // @ts-expect-error TS2339
             return Buffer.from(await fs.readFile(this.url, 'base64'), 'base64').buffer;
         } else {
             const data = await fs.promises.readFile(this.filePath);
@@ -173,6 +176,7 @@ class FileResponse {
         /** @type {Buffer} */
         let data;
         if (apis.IS_REACT_NATIVE_ENV) {
+            // @ts-expect-error TS2339
             data = Buffer.from(await fs.readFile(this.url, 'base64'), 'base64');
         } else {
             data = await fs.promises.readFile(this.filePath);
@@ -188,6 +192,7 @@ class FileResponse {
      */
     async text() {
         if (apis.IS_REACT_NATIVE_ENV) {
+            // @ts-expect-error TS2339
             return await fs.readFile(this.url, 'utf8');
         } else {
             const data = await fs.promises.readFile(this.filePath, 'utf8');
@@ -272,6 +277,7 @@ function fetchBinaryImpl(url, options = {}) {
             xhr.setRequestHeader(name, value);
         });
 
+        // @ts-ignore
         xhr.send(request._bodyInit ?? null);
     });
 }
@@ -287,10 +293,11 @@ export const fetchBinary = apis.IS_REACT_NATIVE_ENV ? fetchBinaryImpl : fetch;
  */
 function isValidUrl(string, protocols = null, validHosts = null) {
     if (apis.IS_REACT_NATIVE_ENV) {
-        if (protocols && !protocols.some((protocol) => string.startsWith(protocol)))
+        const strUrl = String(string);
+        if (protocols && !protocols.some((protocol) => strUrl.startsWith(protocol)))
             return false;
         if (validHosts) {
-            const match = string.match(/^(\w+\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)/);
+            const match = strUrl.match(/^(\w+\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)/);
             if (!match || !validHosts.includes(match[3]))
               return false;
         }
@@ -321,7 +328,9 @@ function isValidUrl(string, protocols = null, validHosts = null) {
  */
 export async function downloadFile(fromUrl, toFile, progress_callback) {
     if (apis.IS_REACT_NATIVE_ENV) {
+        // @ts-ignore
         await fs.mkdir(path.dirname(toFile));
+        // @ts-ignore
         const { promise } = fs.downloadFile({
             fromUrl,
             toFile,
@@ -473,7 +482,9 @@ class FileCache {
 
         try {
             if (apis.IS_REACT_NATIVE_ENV) {
+                // @ts-ignore
                 await fs.mkdir(path.dirname(outputPath));
+                // @ts-ignore
                 await fs.writeFile(outputPath, buffer.toString('base64'), 'base64');
             } else {
                 await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
@@ -883,7 +894,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
                 dispatchCallback(options.progress_callback, {
                     status: 'progress',
                     name: path_or_repo_id,
-                    file: filename
+                    file: filename,
                     ...data,
                 })
             });
@@ -900,7 +911,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
         }
     }
 
-    return apis.IS_REACT_NATIVE_ENV ? response.url : response.filePath;
+    return String(apis.IS_REACT_NATIVE_ENV ? response.url : /** @type {FileResponse} */ (response).filePath);
 }
 
 /**
@@ -920,8 +931,6 @@ export async function getModelJSON(modelPath, fileName, fatal = true, options = 
         return {}
     }
 
-    if (apis.IS_REACT_NATIVE_ENV) return JSON.parse(Buffer.from(buffer));
-
     let decoder = new TextDecoder('utf-8');
     let jsonData = decoder.decode(buffer);
     return JSON.parse(jsonData);
@@ -935,6 +944,7 @@ export async function getModelJSON(modelPath, fileName, fatal = true, options = 
  */
 async function readResponse(response, progress_callback) {
     if (apis.IS_REACT_NATIVE_ENV) {
+        // @ts-expect-error TS2339
         return await response.arrayBuffer();
     }
 

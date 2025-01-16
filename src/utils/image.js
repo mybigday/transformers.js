@@ -12,6 +12,7 @@ import { isNullishDimension } from './core.js';
 import { getFile } from './hub.js';
 import { env, apis } from '../env.js';
 import { Tensor } from './tensor.js';
+import { interpolate_data, permute_data } from './maths.js';
 
 import * as codecs from 'image-codecs';
 import { Buffer } from 'buffer';
@@ -47,11 +48,12 @@ if (apis.IS_REACT_NATIVE_ENV) {
                     ctx.drawImage(image, 0, 0);
                     const { data } = ctx.getImageData(0, 0, image.width, image.height);
                     resolve(new RawImage(data, image.width, image.height, 4));
+                    // @ts-expect-error TS2339
                     image.dispose?.();
                     canvas.dispose?.();
                 }
                 image.onerror = reject;
-                image.src = url;
+                image.src = String(url);
             });
         ImageDataClass = global.ImageData;
     }
@@ -180,12 +182,14 @@ export class RawImage {
      * @returns {Promise<RawImage>} The image object.
      */
     static async fromURL(url) {
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             if (env.rnUseCanvas && loadImageFunction) {
                 return await loadImageFunction(url);
             } else {
-                let response = await getFile(url);
-                return this.fromBlob(response);
+                const response = await getFile(url);
+                const buffer = await response.arrayBuffer();
+                const { data, width, height } = codecs.decode(Buffer.from(buffer));
+                return new RawImage(new Uint8ClampedArray(data), width, height, 4);
             }
         } else {
             const response = await getFile(url);
@@ -203,11 +207,7 @@ export class RawImage {
      * @returns {Promise<RawImage>} The image object.
      */
     static async fromBlob(blob) {
-        if (IS_REACT_NATIVE) {
-            const buffer = await blob.arrayBuffer();
-            const { data, width, height } = codecs.decode(Buffer.from(buffer));
-            return new RawImage(new Uint8ClampedArray(data), width, height, 4);
-        } else if (IS_BROWSER_OR_WEBWORKER) {
+        if (IS_BROWSER_OR_WEBWORKER) {
             // Running in environment with canvas
             const img = await loadImageFunction(blob);
 
@@ -425,7 +425,7 @@ export class RawImage {
             height = (width / this.width) * this.height;
         }
 
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             if (createCanvasFunction !== undefined && env.rnUseCanvas) {
                 // Running in environment with canvas
                 let canvas = createCanvasFunction(this.width, this.height);
@@ -531,7 +531,7 @@ export class RawImage {
             return this;
         }
 
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             if (createCanvasFunction !== undefined && env.rnUseCanvas) {
                 // Running in environment with canvas
                 let newWidth = this.width + left + right;
@@ -611,7 +611,7 @@ export class RawImage {
         const crop_width = x_max - x_min + 1;
         const crop_height = y_max - y_min + 1;
 
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             if (createCanvasFunction !== undefined && env.rnUseCanvas) {
                 // Running in environment with canvas
                 let canvas = createCanvasFunction(crop_width, crop_height);
@@ -685,7 +685,7 @@ export class RawImage {
         const width_offset = (this.width - crop_width) / 2;
         const height_offset = (this.height - crop_height) / 2;
 
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             return this.crop([
                 width_offset, height_offset,
                 width_offset + crop_width - 1, height_offset + crop_height - 1
@@ -796,7 +796,7 @@ export class RawImage {
     }
 
     toImageData() {
-        if (IS_REACT_NATIVE && ImageDataClass === undefined)
+        if (apis.IS_REACT_NATIVE_ENV && ImageDataClass === undefined)
             throw new Error('toImageData() is only supported in browser environments.');
         // Clone, and convert data to RGBA before create ImageData object.
         // This is because the ImageData API only supports RGBA
@@ -936,12 +936,13 @@ export class RawImage {
      */
     async save(path) {
         const extension = path.split('.').pop().toLowerCase();
-        const mime = this._CONTENT_TYPE_MAP[extension] ?? 'image/png';
+        const mime = CONTENT_TYPE_MAP.get(extension) ?? 'image/png';
 
-        if (IS_REACT_NATIVE) {
+        if (apis.IS_REACT_NATIVE_ENV) {
             const buf = Buffer.from(codecs.encode(this.rgba().data, mime));
+            // @ts-expect-error TS2339
             await fs.writeFile(path, buf.toString('base64'), 'base64');
-        if (IS_BROWSER_OR_WEBWORKER) {
+        } else if (IS_BROWSER_OR_WEBWORKER) {
             if (apis.IS_WEBWORKER_ENV) {
                 throw new Error('Unable to save an image from a Web Worker.')
             }
@@ -978,7 +979,7 @@ export class RawImage {
     }
 
     toSharp() {
-        if (IS_BROWSER_OR_WEBWORKER || IS_REACT_NATIVE) {
+        if (IS_BROWSER_OR_WEBWORKER || apis.IS_REACT_NATIVE_ENV) {
             throw new Error('toSharp() is only supported in server-side environments.')
         }
 

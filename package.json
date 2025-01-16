@@ -57,6 +57,7 @@
   "dependencies": {
     "@huggingface/jinja": "^0.3.2",
     "image-codecs": "^0.1.0",
+    "node-wav": "^0.0.2",
     "onnxruntime-node": "1.20.1",
     "onnxruntime-web": "1.21.0-dev.20241205-d27fecd3d3",
     "onnxruntime-react-native": "1.20.1",
@@ -105,7 +106,8 @@
     "path": false,
     "url": false,
     "sharp": false,
-    "onnxruntime-node": false
+    "onnxruntime-node": false,
+    "node-wav": false
   },
   "publishConfig": {
     "access": "public"

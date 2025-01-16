@@ -81,6 +81,7 @@ const RUNNING_LOCALLY = IS_FS_AVAILABLE && IS_PATH_AVAILABLE;
 
 let dirname__ = './';
 if (IS_REACT_NATIVE_ENV) {
+    // @ts-ignore
     dirname__ = fs.DocumentDirectoryPath;
 } else if (RUNNING_LOCALLY) {
     // NOTE: We wrap `import.meta` in a call to `Object` to prevent Webpack from trying to bundle it in CommonJS.
@@ -122,6 +123,7 @@ const localModelPath = RUNNING_LOCALLY
  * @property {boolean} useFS Whether to use the file system to load files. By default, it is `true` if available.
  * @property {boolean} useBrowserCache Whether to use Cache API to cache models. By default, it is `true` if available.
  * @property {boolean} useFSCache Whether to use the file system to cache files. By default, it is `true` if available.
+ * @property {boolean} rnUseCanvas Whether to use the Canvas API to load images on React Native. By default, it is `true`.
  * @property {string} cacheDir The directory to use for caching files with the file system. By default, it is `./.cache`.
  * @property {boolean} useCustomCache Whether to use a custom cache system (defined by `customCache`), defaults to `false`.
  * @property {Object} customCache The custom cache to use. Defaults to `null`. Note: this must be an object which

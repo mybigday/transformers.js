@@ -37,12 +37,12 @@ export async function read_audio(url, sampling_rate) {
         decoded = await audioCTX.decodeAudioData(buffer);
     } else if (response.headers.get('content-type') === 'audio/wav') {
         const decodedWav = wav.decode(buffer);
-        decoded = {
+        decoded = /** @type {AudioBuffer} */({
             numberOfChannels: decodedWav.channelData.length,
             getChannelData: (i) => decodedWav.channelData[i],
             length: decodedWav.channelData[0].length,
             sampleRate: decodedWav.sampleRate,
-        };
+        });
     } else {
         // Running in node or an environment without AudioContext
         throw Error(

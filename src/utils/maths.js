@@ -967,12 +967,14 @@ export function round(num, decimals) {
  */
 export function resample(data, factor) {
     const target = Math.floor(data.length * factor);
+    // @ts-ignore
     const output = new data.constructor(target);
     for (let i = 0; i < target; ++i) {
         const index = i / factor;
         const lower = Math.floor(index);
         const upper = Math.min(Math.ceil(index), data.length - 1);
         const weight = index - lower;
+        // @ts-ignore
         output[i] = data[lower] * (1 - weight) + data[upper] * weight;
     }
     return output;

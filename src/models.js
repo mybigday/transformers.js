@@ -251,6 +251,7 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
     if (apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV) {
 
         const pathPromise = getModelPath(pretrained_model_name_or_path, modelFileName, true, options);
+
         // handle onnx external data files
         const use_external_data_format = options.use_external_data_format ?? custom_config.use_external_data_format;
         /** @type {Promise<{path: string, data: string}>[]} */
@@ -315,8 +316,11 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
         } else if (session_options.externalData !== undefined) {
             externalDataPromises = session_options.externalData.map(async (ext) => {
                 // if the external data is a string, fetch the file and replace the string with its content
+                // @ts-expect-error TS2339
                 if (typeof ext.data === "string") {
+                    // @ts-expect-error TS2339
                     const ext_buffer = await getModelFile(pretrained_model_name_or_path, ext.data, true, options);
+                    // @ts-expect-error TS2698
                     return { ...ext, data: ext_buffer };
                 }
                 return ext;
