@@ -10,7 +10,7 @@
 
 import { isNullishDimension, saveBlob } from './core.js';
 import { getFile } from './hub.js';
-import { apis } from '../env.js';
+import { apis, env } from '../env.js';
 import { Tensor } from './tensor.js';
 import { interpolate_data, permute_data } from './maths.js';
 
