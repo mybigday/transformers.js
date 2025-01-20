@@ -57,6 +57,7 @@ const supportedDevices = [];
 /** @type {ONNXExecutionProviders[]} */
 let defaultDevices;
 let ONNX;
+let devicesPromise = Promise.resolve();
 const ORT_SYMBOL = Symbol.for('onnxruntime');
 
 if (ORT_SYMBOL in globalThis) {
@@ -66,19 +67,18 @@ if (ORT_SYMBOL in globalThis) {
 } else if (apis.IS_REACT_NATIVE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
-    supportedDevices.push('xnnpack', 'cpu');
-    defaultDevices = ['cpu'];
-
-    import('react-native').then(({ Platform }) => {
+    devicesPromise = import('react-native').then(({ Platform }) => {
         if (Platform.OS === 'android') {
-            supportedDevices.unshift('nnapi');
-            defaultDevices.unshift('nnapi');
+            supportedDevices.push('nnapi', 'xnnpack', 'cpu');
+            defaultDevices = ['nnapi', 'cpu'];
         } else if (Platform.OS === 'ios') {
-            supportedDevices.unshift('coreml');
-            defaultDevices.unshift('coreml');
+            supportedDevices.push('coreml', 'xnnpack', 'cpu');
+            defaultDevices = ['coreml', 'cpu'];
+        } else {
+            supportedDevices.push('xnnpack', 'cpu');
+            defaultDevices = ['cpu'];
         }
     });
-
 } else if (apis.IS_NODE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
@@ -126,9 +126,11 @@ const InferenceSession = ONNX.InferenceSession;
 /**
  * Map a device to the execution providers to use for the given device.
  * @param {import("../utils/devices.js").DeviceType|"auto"|null} [device=null] (Optional) The device to run the inference on.
- * @returns {ONNXExecutionProviders[]} The execution providers to use for the given device.
+ * @returns {Promise<ONNXExecutionProviders[]>} The execution providers to use for the given device.
  */
-export function deviceToExecutionProviders(device = null) {
+export async function deviceToExecutionProviders(device = null) {
+    await devicesPromise;
+
     // Use the default execution providers if the user hasn't specified anything
     if (!device) return defaultDevices;
 
