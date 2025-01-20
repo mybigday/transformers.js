@@ -16,6 +16,7 @@ import {
 } from './core.js';
 import { apis } from '../env.js';
 import fs from 'fs';
+import NativeFS from 'native-universal-fs';
 import { Tensor, matmul } from './tensor.js';
 
 
@@ -810,9 +811,16 @@ export class RawAudio {
             }
             fn = saveBlob;
         } else if (apis.IS_FS_AVAILABLE) {
-            fn = async (/** @type {string} */ path, /** @type {Blob} */ blob) => {
-                let buffer = await blob.arrayBuffer();
-                fs.writeFileSync(path, Buffer.from(buffer));
+            if (apis.IS_REACT_NATIVE_ENV) {
+                fn = async (/** @type {string} */ path, /** @type {Blob} */ blob) => {
+                    let buffer = await blob.arrayBuffer();
+                    await NativeFS.writeFile(path, Buffer.from(buffer).toString('base64'), 'base64');
+                }
+            } else {
+                fn = async (/** @type {string} */ path, /** @type {Blob} */ blob) => {
+                    let buffer = await blob.arrayBuffer();
+                    fs.writeFileSync(path, Buffer.from(buffer));
+                }
             }
         } else {
             throw new Error('Unable to save because filesystem is disabled in this environment.')

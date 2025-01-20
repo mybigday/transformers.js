@@ -7,6 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import NativeFS from 'native-universal-fs';
 import { Buffer } from 'buffer';
 
 import { env, apis } from '../env.js';
@@ -90,13 +91,11 @@ class FileResponse {
         let response = new FileResponse(filePath);
         
         if (apis.IS_REACT_NATIVE_ENV) {
-            // @ts-expect-error TS2339
-            response.ok = await fs.exists(response.url);
+            response.ok = await NativeFS.exists(String(response.url));
             if (response.ok) {
                 response.status = 200;
                 response.statusText = 'OK';
-                // @ts-expect-error TS2339
-                response.headers.append('content-length', String(await fs.stat(response.url).size));
+                response.headers.append('content-length', String((await NativeFS.stat(String(response.url))).size));
                 response.headers.append('content-type', getMIME(response.url));
             } else {
                 response.status = 404;
@@ -158,8 +157,7 @@ class FileResponse {
      */
     async arrayBuffer() {
         if (apis.IS_REACT_NATIVE_ENV) {
-            // @ts-expect-error TS2339
-            return Buffer.from(await fs.readFile(this.url, 'base64'), 'base64').buffer;
+            return Buffer.from(await NativeFS.readFile(String(this.url), 'base64'), 'base64').buffer;
         } else {
             const data = await fs.promises.readFile(this.filePath);
             return /** @type {ArrayBuffer} */ (data.buffer);
@@ -176,8 +174,7 @@ class FileResponse {
         /** @type {Buffer} */
         let data;
         if (apis.IS_REACT_NATIVE_ENV) {
-            // @ts-expect-error TS2339
-            data = Buffer.from(await fs.readFile(this.url, 'base64'), 'base64');
+            data = Buffer.from(await NativeFS.readFile(String(this.url), 'base64'), 'base64');
         } else {
             data = await fs.promises.readFile(this.filePath);
         }
@@ -192,8 +189,7 @@ class FileResponse {
      */
     async text() {
         if (apis.IS_REACT_NATIVE_ENV) {
-            // @ts-expect-error TS2339
-            return await fs.readFile(this.url, 'utf8');
+            return await NativeFS.readFile(String(this.url), 'utf8');
         } else {
             const data = await fs.promises.readFile(this.filePath, 'utf8');
             return data;
@@ -328,11 +324,9 @@ function isValidUrl(string, protocols = null, validHosts = null) {
  */
 export async function downloadFile(fromUrl, toFile, progress_callback) {
     if (apis.IS_REACT_NATIVE_ENV) {
-        // @ts-ignore
-        await fs.mkdir(path.dirname(toFile));
-        // @ts-ignore
-        const { promise } = fs.downloadFile({
-            fromUrl,
+        await NativeFS.mkdir(path.dirname(toFile));
+        const { promise } = NativeFS.downloadFile({
+            fromUrl: String(fromUrl),
             toFile,
             progressInterval: 200,
             progress: ({ contentLength, bytesWritten }) => {
@@ -482,10 +476,8 @@ class FileCache {
 
         try {
             if (apis.IS_REACT_NATIVE_ENV) {
-                // @ts-ignore
-                await fs.mkdir(path.dirname(outputPath));
-                // @ts-ignore
-                await fs.writeFile(outputPath, buffer.toString('base64'), 'base64');
+                await NativeFS.mkdir(path.dirname(outputPath));
+                await NativeFS.writeFile(outputPath, buffer.toString('base64'), 'base64');
             } else {
                 await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
                 await fs.promises.writeFile(outputPath, buffer);

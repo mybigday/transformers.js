@@ -19,7 +19,7 @@ import { Buffer } from 'buffer';
 
 // Will be empty (or not used) if running in browser or web-worker
 import sharp from 'sharp';
-import fs from 'fs';
+import NativeFS from 'native-universal-fs';
 
 let createCanvasFunction;
 let ImageDataClass;
@@ -940,8 +940,7 @@ export class RawImage {
 
         if (apis.IS_REACT_NATIVE_ENV) {
             const buf = Buffer.from(codecs.encode(this.rgba().data, mime));
-            // @ts-expect-error TS2339
-            await fs.writeFile(path, buf.toString('base64'), 'base64');
+            await NativeFS.writeFile(path, buf.toString('base64'), 'base64');
         } else if (IS_BROWSER_OR_WEBWORKER) {
             if (apis.IS_WEBWORKER_ENV) {
                 throw new Error('Unable to save an image from a Web Worker.')
