@@ -39,6 +39,8 @@ const DEVICE_TO_EXECUTION_PROVIDER_MAPPING = Object.freeze({
     cuda: 'cuda', // CUDA
     dml: 'dml', // DirectML
     xnnpack: 'xnnpack', // XNNPACK
+    nnapi: 'nnapi', // NNAPI
+    coreml: 'coreml', // CoreML
 
     webnn: { name: 'webnn', deviceType: 'cpu' }, // WebNN (default)
     'webnn-npu': { name: 'webnn', deviceType: 'npu' }, // WebNN NPU
@@ -64,8 +66,18 @@ if (ORT_SYMBOL in globalThis) {
 } else if (apis.IS_REACT_NATIVE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
-    supportedDevices.push('xnnpack', 'cpu');
-    defaultDevices = ['xnnpack', 'cpu'];
+    import('react-native').then(({ Platform }) => {
+        supportedDevices.push('xnnpack', 'cpu');
+        if (Platform.OS === 'android') {
+            supportedDevices.unshift('nnapi');
+            defaultDevices = ['nnapi', 'cpu'];
+        } else if (Platform.OS === 'ios') {
+            supportedDevices.unshift('coreml');
+            defaultDevices = ['coreml', 'cpu'];
+        } else {
+            defaultDevices = ['cpu'];
+        }
+    });
 
 } else if (apis.IS_NODE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;

@@ -381,7 +381,7 @@ export async function getFile(urlOrPath) {
 
 
     if (env.useFS && !isValidUrl(urlOrPath, ['http:', 'https:', 'blob:'])) {
-        return new FileResponse(urlOrPath);
+        return await FileResponse.create(urlOrPath);
 
     } else if (typeof process !== 'undefined' && process?.release?.name === 'node') {
         const IS_CI = !!process.env?.TESTING_REMOTELY;
@@ -865,7 +865,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
             throw new Error(`\`env.allowRemoteModels=false\`, but attempted to load a remote file from: ${requestURL}.`);
         }
 
-        if (response === undefined || response.status === 404) {
+        if (response === undefined || !response.ok) {
             // File not found locally. This means either:
             // - The user has disabled local file access (`env.allowLocalModels=false`)
             // - the path is a valid HTTP url (`response === undefined`)

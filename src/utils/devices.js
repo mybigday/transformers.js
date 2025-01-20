@@ -11,6 +11,8 @@ export const DEVICE_TYPES = Object.freeze({
     cuda: 'cuda', // CUDA
     dml: 'dml', // DirectML
     xnnpack: 'xnnpack', // XNNPACK
+    nnapi: 'nnapi', // NNAPI
+    coreml: 'coreml', // CoreML
 
     webnn: 'webnn', // WebNN (default)
     'webnn-npu': 'webnn-npu', // WebNN NPU

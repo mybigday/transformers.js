@@ -84,10 +84,11 @@ if (IS_REACT_NATIVE_ENV) {
     // @ts-ignore
     dirname__ = fs.DocumentDirectoryPath;
 } else if (RUNNING_LOCALLY) {
-    // NOTE: We wrap `import.meta` in a call to `Object` to prevent Webpack from trying to bundle it in CommonJS.
-    // Although we get the warning: "Accessing import.meta directly is unsupported (only property access or destructuring is supported)",
-    // it is safe to ignore since the bundled value (`{}`) isn't used for CommonJS environments (we use __dirname instead).
-    const _import_meta_url = Object(import.meta).url;
+    // NOTE: Use eval to avoid SyntaxError and prevent Webpack from bundling it in CommonJS.
+    let _import_meta_url = null;
+    try {
+        _import_meta_url = eval('import.meta.url');
+    } catch {}
 
     if (_import_meta_url) {
         dirname__ = path.dirname(path.dirname(url.fileURLToPath(_import_meta_url))) // ESM
