@@ -17,7 +17,6 @@ import {
 import { apis } from '../env.js';
 import fs from 'fs';
 import { Tensor, matmul } from './tensor.js';
-import wav from 'node-wav';
 
 
 /**
@@ -37,14 +36,6 @@ export async function read_audio(url, sampling_rate) {
             console.warn(`No sampling rate provided, using default of ${audioCTX.sampleRate}Hz.`)
         }
         decoded = await audioCTX.decodeAudioData(buffer);
-    } else if (response.headers.get('content-type') === 'audio/wav') {
-        const decodedWav = wav.decode(buffer);
-        decoded = /** @type {AudioBuffer} */({
-            numberOfChannels: decodedWav.channelData.length,
-            getChannelData: (i) => decodedWav.channelData[i],
-            length: decodedWav.channelData[0].length,
-            sampleRate: decodedWav.sampleRate,
-        });
     } else {
         // Running in node or an environment without AudioContext
         throw Error(

@@ -57,7 +57,6 @@
   "dependencies": {
     "@huggingface/jinja": "^0.3.2",
     "image-codecs": "^0.1.0",
-    "node-wav": "^0.0.2",
     "onnxruntime-node": "1.20.1",
     "onnxruntime-web": "1.21.0-dev.20250114-228dd16893",
     "onnxruntime-react-native": "1.20.1",
