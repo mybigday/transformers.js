@@ -4332,6 +4332,19 @@ export class LlamaModel extends LlamaPreTrainedModel { }
 export class LlamaForCausalLM extends LlamaPreTrainedModel { }
 //////////////////////////////////////////////////
 
+//////////////////////////////////////////////////
+// Helium models
+export class HeliumPreTrainedModel extends PreTrainedModel { }
+export class HeliumModel extends HeliumPreTrainedModel { }
+export class HeliumForCausalLM extends HeliumPreTrainedModel { }
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+// Glm models
+export class GlmPreTrainedModel extends PreTrainedModel { }
+export class GlmModel extends GlmPreTrainedModel { }
+export class GlmForCausalLM extends GlmPreTrainedModel { }
+//////////////////////////////////////////////////
 
 //////////////////////////////////////////////////
 // EXAONE models
@@ -7186,6 +7199,8 @@ const MODEL_MAPPING_NAMES_DECODER_ONLY = new Map([
     ['cohere', ['CohereModel', CohereModel]],
     ['gemma', ['GemmaModel', GemmaModel]],
     ['gemma2', ['Gemma2Model', Gemma2Model]],
+    ['helium', ['HeliumModel', HeliumModel]],
+    ['glm', ['GlmModel', GlmModel]],
     ['openelm', ['OpenELMModel', OpenELMModel]],
     ['qwen2', ['Qwen2Model', Qwen2Model]],
     ['phi', ['PhiModel', PhiModel]],
@@ -7282,6 +7297,8 @@ const MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = new Map([
     ['cohere', ['CohereForCausalLM', CohereForCausalLM]],
     ['gemma', ['GemmaForCausalLM', GemmaForCausalLM]],
     ['gemma2', ['Gemma2ForCausalLM', Gemma2ForCausalLM]],
+    ['helium', ['HeliumForCausalLM', HeliumForCausalLM]],
+    ['glm', ['GlmForCausalLM', GlmForCausalLM]],
     ['openelm', ['OpenELMForCausalLM', OpenELMForCausalLM]],
     ['qwen2', ['Qwen2ForCausalLM', Qwen2ForCausalLM]],
     ['phi', ['PhiForCausalLM', PhiForCausalLM]],
