@@ -66,16 +66,16 @@ if (ORT_SYMBOL in globalThis) {
 } else if (apis.IS_REACT_NATIVE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
+    supportedDevices.push('xnnpack', 'cpu');
+    defaultDevices = ['cpu'];
+
     import('react-native').then(({ Platform }) => {
-        supportedDevices.push('xnnpack', 'cpu');
         if (Platform.OS === 'android') {
             supportedDevices.unshift('nnapi');
-            defaultDevices = ['nnapi', 'cpu'];
+            defaultDevices.unshift('nnapi');
         } else if (Platform.OS === 'ios') {
             supportedDevices.unshift('coreml');
-            defaultDevices = ['coreml', 'cpu'];
-        } else {
-            defaultDevices = ['cpu'];
+            defaultDevices.unshift('coreml');
         }
     });
 
