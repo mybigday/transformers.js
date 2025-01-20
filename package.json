@@ -89,6 +89,7 @@
     "LICENSE"
   ],
   "react-native": {
+    "react-native": "react-native",
     "fs": false,
     "onnxruntime-web": false,
     "onnxruntime-node": "onnxruntime-react-native",
