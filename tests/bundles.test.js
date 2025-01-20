@@ -1,6 +1,6 @@
 import { spawnSync } from "child_process";
 
-const MODULE_NAME = "@huggingface/transformers";
+const MODULE_NAME = "@fugood/transformers";
 
 const CODE_BODY = `
 const model_id = "hf-internal-testing/tiny-random-LlamaForCausalLM";
