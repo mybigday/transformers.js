@@ -120,7 +120,6 @@ import { apis } from './env.js';
 import { WhisperGenerationConfig } from './models/whisper/generation_whisper.js';
 import { whisper_language_to_code } from './models/whisper/common_whisper.js';
 
-const IS_BROWSER = typeof navigator !== 'undefined' && navigator.product !== 'ReactNative';
 
 //////////////////////////////////////////////////
 // Model types: used internally
@@ -412,7 +411,7 @@ function validateInputs(session, inputs) {
             missingInputs.push(inputName);
             continue;
         }
-        // NOTE: When `onnx_env.wasm.proxy is true` the tensor is moved across the Worker
+        // NOTE: When `env.wasm.proxy is true` the tensor is moved across the Worker
         // boundary, transferring ownership to the worker and invalidating the tensor.
         // So, in this case, we simply sacrifice a clone for it.
         checkedInputs[inputName] = isONNXProxy() ? tensor.clone() : tensor;
