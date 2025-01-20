@@ -7,20 +7,18 @@
 
 import fs from 'fs';
 import path from 'path';
+import * as NativeFS from 'native-universal-fs';
 import { Buffer } from 'buffer';
 
-import { env } from '../env.js';
+import { env, apis } from '../env.js';
 import { dispatchCallback } from './core.js';
 
-
-const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
 
 
 /**
  * @typedef {Object} PretrainedOptions Options for loading a pretrained model.     
- * @property {boolean?} [quantized=true] Whether to load the 8-bit quantized version of the model (only applicable when loading model files).
- * @property {function} [progress_callback=null] If specified, this function will be called during model construction, to provide the user with progress updates.
- * @property {Object} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
+ * @property {import('./core.js').ProgressCallback} [progress_callback=null] If specified, this function will be called during model construction, to provide the user with progress updates.
+ * @property {import('../configs.js').PretrainedConfig} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
  * - The model is a model provided by the library (loaded with the *model id* string of a pretrained model).
  * - The model is loaded by supplying a local directory as `pretrained_model_name_or_path` and a configuration JSON file named *config.json* is found in the directory.
  * @property {string} [cache_dir=null] Path to a directory in which a downloaded pretrained model configuration should be cached if the standard cache should not be used.
@@ -28,9 +26,21 @@ const IS_REACT_NATIVE = typeof navigator !== 'undefined' && navigator.product ==
  * @property {string} [revision='main'] The specific model version to use. It can be a branch name, a tag name, or a commit id,
  * since we use a git-based system for storing models and other artifacts on huggingface.co, so `revision` can be any identifier allowed by git.
  * NOTE: This setting is ignored for local requests.
+ */
+
+/**
+ * @typedef {Object} ModelSpecificPretrainedOptions Options for loading a pretrained model.
+ * @property {string} [subfolder='onnx'] In case the relevant files are located inside a subfolder of the model repo on huggingface.co,
+ * you can specify the folder name here.
  * @property {string} [model_file_name=null] If specified, load the model with this name (excluding the .onnx suffix). Currently only valid for encoder- or decoder-only models.
- * @property {string} [subfolder=null] If specified, load the model from this subdirectory of the model repository.
- * @property {Object} [session_options={}] Options to pass to the backend session.
+ * @property {import("./devices.js").DeviceType|Record<string, import("./devices.js").DeviceType>} [device=null] The device to run the model on. If not specified, the device will be chosen from the environment settings.
+ * @property {import("./dtypes.js").DataType|Record<string, import("./dtypes.js").DataType>} [dtype=null] The data type to use for the model. If not specified, the data type will be chosen from the environment settings.
+ * @property {boolean|Record<string, boolean>} [use_external_data_format=false] Whether to load the model using the external data format (used for models >= 2GB in size).
+ * @property {import('onnxruntime-common').InferenceSession.SessionOptions} [session_options] (Optional) User-specified session options passed to the runtime. If not provided, suitable defaults will be chosen.
+ */
+
+/**
+ * @typedef {PretrainedOptions & ModelSpecificPretrainedOptions} PretrainedModelOptions Options for loading a pretrained model.
  */
 
 /**
@@ -61,22 +71,14 @@ function getMIME(path) {
     return CONTENT_TYPE_MAP[extension] ?? 'application/octet-stream';
 }
 
-/**
- * @property {boolean} ok
- * @property {number} status
- * @property {string} statusText
- * @property {Headers} headers
- * @property {string} url
- * @property {string} filePath
- * @property {ReadableStream<Uint8Array>|null} body
- */
 class FileResponse {
+
     /**
      * Creates a new `FileResponse` object.
      * @param {string|URL} filePath
      */
     constructor(filePath) {
-        this.url = String(filePath).startsWith('file://') ? String(filePath) : `file://${filePath}`;
+        this.url = String(filePath).startsWith('file://') ? filePath : `file://${filePath}`;
         this.filePath = filePath;
         this.headers = new Headers();
         this.ok = false;
@@ -88,12 +90,12 @@ class FileResponse {
     static async create(filePath) {
         let response = new FileResponse(filePath);
         
-        if (IS_REACT_NATIVE) {
-            response.ok = await fs.exists(response.url);
+        if (apis.IS_REACT_NATIVE_ENV) {
+            response.ok = await NativeFS.exists(String(response.url));
             if (response.ok) {
                 response.status = 200;
                 response.statusText = 'OK';
-                response.headers.append('content-length', String(await fs.stat(response.url).size));
+                response.headers.append('content-length', String((await NativeFS.stat(String(response.url))).size));
                 response.headers.append('content-type', getMIME(response.url));
             } else {
                 response.status = 404;
@@ -134,7 +136,7 @@ class FileResponse {
     }
 
     get body() {
-        if (IS_REACT_NATIVE) throw new Error('`body` is not supported in React Native.');
+        if (apis.IS_REACT_NATIVE_ENV) throw new Error('`body` is not supported in React Native.');
         const self = this;
         this._body ??= new ReadableStream({
             start(controller) {
@@ -154,11 +156,11 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async arrayBuffer() {
-        if (IS_REACT_NATIVE) {
-            return Buffer.from(await fs.readFile(this.url, 'base64'), 'base64').buffer;
+        if (apis.IS_REACT_NATIVE_ENV) {
+            return Buffer.from(await NativeFS.readFile(String(this.url), 'base64'), 'base64').buffer;
         } else {
             const data = await fs.promises.readFile(this.filePath);
-            return data.buffer;
+            return /** @type {ArrayBuffer} */ (data.buffer);
         }
     }
 
@@ -171,8 +173,8 @@ class FileResponse {
     async blob() {
         /** @type {Buffer} */
         let data;
-        if (IS_REACT_NATIVE) {
-            data = Buffer.from(await fs.readFile(this.url, 'base64'), 'base64');
+        if (apis.IS_REACT_NATIVE_ENV) {
+            data = Buffer.from(await NativeFS.readFile(String(this.url), 'base64'), 'base64');
         } else {
             data = await fs.promises.readFile(this.filePath);
         }
@@ -186,8 +188,8 @@ class FileResponse {
      * @throws {Error} If the file cannot be read.
      */
     async text() {
-        if (IS_REACT_NATIVE) {
-            return await fs.readFile(this.url, 'utf8');
+        if (apis.IS_REACT_NATIVE_ENV) {
+            return await NativeFS.readFile(String(this.url), 'utf8');
         } else {
             const data = await fs.promises.readFile(this.filePath, 'utf8');
             return data;
@@ -271,11 +273,12 @@ function fetchBinaryImpl(url, options = {}) {
             xhr.setRequestHeader(name, value);
         });
 
+        // @ts-ignore
         xhr.send(request._bodyInit ?? null);
     });
 }
 
-export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
+export const fetchBinary = apis.IS_REACT_NATIVE_ENV ? fetchBinaryImpl : fetch;
 
 /**
  * Determines whether the given string is a valid URL.
@@ -285,11 +288,12 @@ export const fetchBinary = IS_REACT_NATIVE ? fetchBinaryImpl : fetch;
  * @returns {boolean} True if the string is a valid URL, false otherwise.
  */
 function isValidUrl(string, protocols = null, validHosts = null) {
-    if (IS_REACT_NATIVE) {
-        if (protocols && !protocols.some((protocol) => string.startsWith(protocol)))
+    if (apis.IS_REACT_NATIVE_ENV) {
+        const strUrl = String(string);
+        if (protocols && !protocols.some((protocol) => strUrl.startsWith(protocol)))
             return false;
         if (validHosts) {
-            const match = string.match(/^(\w+\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)/);
+            const match = strUrl.match(/^(\w+\:)\/\/(([^:\/?#]*)(?:\:([0-9]+))?)/);
             if (!match || !validHosts.includes(match[3]))
               return false;
         }
@@ -319,10 +323,10 @@ function isValidUrl(string, protocols = null, validHosts = null) {
  * @returns {Promise<void>}
  */
 export async function downloadFile(fromUrl, toFile, progress_callback) {
-    if (IS_REACT_NATIVE) {
-        await fs.mkdir(path.dirname(toFile));
-        const { promise } = fs.downloadFile({
-            fromUrl,
+    if (apis.IS_REACT_NATIVE_ENV) {
+        await NativeFS.mkdir(path.dirname(toFile));
+        const { promise } = NativeFS.downloadFile({
+            fromUrl: String(fromUrl),
             toFile,
             progressInterval: 200,
             progress: ({ contentLength, bytesWritten }) => {
@@ -368,6 +372,7 @@ export async function downloadFile(fromUrl, toFile, progress_callback) {
  * @returns {Promise<FileResponse|Response>} A promise that resolves to a FileResponse object (if the file is retrieved using the FileSystem API), or a Response object (if the file is retrieved using the Fetch API).
  */
 export async function getFile(urlOrPath) {
+
 
     if (env.useFS && !isValidUrl(urlOrPath, ['http:', 'https:', 'blob:'])) {
         return await FileResponse.create(urlOrPath);
@@ -470,9 +475,9 @@ class FileCache {
         let outputPath = path.join(this.path, request);
 
         try {
-            if (IS_REACT_NATIVE) {
-                await fs.mkdir(path.dirname(outputPath));
-                await fs.writeFile(outputPath, buffer.toString('base64'), 'base64');
+            if (apis.IS_REACT_NATIVE_ENV) {
+                await NativeFS.mkdir(path.dirname(outputPath));
+                await NativeFS.writeFile(outputPath, buffer.toString('base64'), 'base64');
             } else {
                 await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
                 await fs.promises.writeFile(outputPath, buffer);
@@ -524,9 +529,6 @@ async function tryCache(cache, ...names) {
  * @returns {Promise<Uint8Array>} A Promise that resolves with the file content as a buffer.
  */
 export async function getModelFile(path_or_repo_id, filename, fatal = true, options = {}) {
-    if (options.subfolder) {
-        filename = pathJoin(options.subfolder, filename);
-    }
 
     if (!env.allowLocalModels) {
         // User has disabled local models, so we just make sure other settings are correct.
@@ -665,7 +667,6 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
                 }
             }
 
-            // File not found locally, so we try to download it from the remote server
             response = await getFile(remoteURL);
 
             if (response.status !== 200) {
@@ -690,13 +691,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
         name: path_or_repo_id,
         file: filename
     })
-  
-    const progressInfo = {
-        status: 'progress',
-        name: path_or_repo_id,
-        file: filename
-    }
-    
+
     /** @type {Uint8Array} */
     let buffer;
 
@@ -716,7 +711,9 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
 
         // For completeness, we still fire the final progress callback
         dispatchCallback(options.progress_callback, {
-            ...progressInfo,
+            status: 'progress',
+            name: path_or_repo_id,
+            file: filename,
             progress: 100,
             loaded: buffer.length,
             total: buffer.length,
@@ -724,7 +721,9 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
     } else {
         buffer = await readResponse(response, data => {
             dispatchCallback(options.progress_callback, {
-                ...progressInfo,
+                status: 'progress',
+                name: path_or_repo_id,
+                file: filename,
                 ...data,
             })
         })
@@ -775,10 +774,6 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
  * @returns {Promise<string>} A Promise that resolves with the file content as a buffer.
  */
 export async function getModelPath(path_or_repo_id, filename, fatal = true, options = {}) {
-    if (options.subfolder) {
-        filename = pathJoin(options.subfolder, filename);
-    }
-
 
     if (!env.allowLocalModels) {
         // User has disabled local models, so we just make sure other settings are correct.
@@ -862,7 +857,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
             throw new Error(`\`env.allowRemoteModels=false\`, but attempted to load a remote file from: ${requestURL}.`);
         }
 
-        if (response === undefined || response.status === 404) {
+        if (response === undefined || !response.ok) {
             // File not found locally. This means either:
             // - The user has disabled local file access (`env.allowLocalModels=false`)
             // - the path is a valid HTTP url (`response === undefined`)
@@ -885,17 +880,13 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
                 name: path_or_repo_id,
                 file: filename
             })
-        
-            const progressInfo = {
-                status: 'progress',
-                name: path_or_repo_id,
-                file: filename
-            }
 
             const cachePath = path.join(options.cache_dir ?? env.cacheDir, proposedCacheKey);
             await downloadFile(remoteURL, cachePath, data => {
                 dispatchCallback(options.progress_callback, {
-                    ...progressInfo,
+                    status: 'progress',
+                    name: path_or_repo_id,
+                    file: filename,
                     ...data,
                 })
             });
@@ -912,7 +903,7 @@ export async function getModelPath(path_or_repo_id, filename, fatal = true, opti
         }
     }
 
-    return IS_REACT_NATIVE ? response.url : response.filePath;
+    return String(apis.IS_REACT_NATIVE_ENV ? response.url : /** @type {FileResponse} */ (response).filePath);
 }
 
 /**
@@ -932,22 +923,20 @@ export async function getModelJSON(modelPath, fileName, fatal = true, options = 
         return {}
     }
 
-    if (IS_REACT_NATIVE) return JSON.parse(Buffer.from(buffer));
-
     let decoder = new TextDecoder('utf-8');
     let jsonData = decoder.decode(buffer);
     return JSON.parse(jsonData);
 }
-
 /**
  * Read and track progress when reading a Response object
  *
- * @param {any} response The Response object to read
- * @param {function} progress_callback The function to call with progress updates
+ * @param {Response|FileResponse} response The Response object to read
+ * @param {(data: {progress: number, loaded: number, total: number}) => void} progress_callback The function to call with progress updates
  * @returns {Promise<Uint8Array>} A Promise that resolves with the Uint8Array buffer
  */
 async function readResponse(response, progress_callback) {
-    if (IS_REACT_NATIVE) {
+    if (apis.IS_REACT_NATIVE_ENV) {
+        // @ts-expect-error TS2339
         return await response.arrayBuffer();
     }
 
