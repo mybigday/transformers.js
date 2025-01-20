@@ -38,7 +38,7 @@ const IS_WEBNN_AVAILABLE = typeof navigator !== 'undefined' && 'ml' in navigator
 
 const IS_PROCESS_AVAILABLE = typeof process !== 'undefined';
 const IS_NODE_ENV = IS_PROCESS_AVAILABLE && process?.release?.name === 'node';
-const IS_FS_AVAILABLE = !isEmpty(fs);
+const IS_FS_AVAILABLE = !isEmpty(fs) || !isEmpty(NativeFS);
 const IS_PATH_AVAILABLE = !isEmpty(path);
 
 const IS_REACT_NATIVE_ENV = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
