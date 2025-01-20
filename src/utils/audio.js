@@ -16,7 +16,7 @@ import {
 } from './core.js';
 import { apis } from '../env.js';
 import fs from 'fs';
-import NativeFS from 'native-universal-fs';
+import * as NativeFS from 'native-universal-fs';
 import { Tensor, matmul } from './tensor.js';
 
 

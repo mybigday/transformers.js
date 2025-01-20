@@ -19,7 +19,7 @@ import { Buffer } from 'buffer';
 
 // Will be empty (or not used) if running in browser or web-worker
 import sharp from 'sharp';
-import NativeFS from 'native-universal-fs';
+import * as NativeFS from 'native-universal-fs';
 
 let createCanvasFunction;
 let ImageDataClass;

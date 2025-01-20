@@ -22,7 +22,7 @@
  * @module env
  */
 
-import NativeFS from 'native-universal-fs';
+import * as NativeFS from 'native-universal-fs';
 import fs from 'fs';
 import path from 'path';
 import url from 'url';

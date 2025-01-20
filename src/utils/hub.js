@@ -7,7 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import NativeFS from 'native-universal-fs';
+import * as NativeFS from 'native-universal-fs';
 import { Buffer } from 'buffer';
 
 import { env, apis } from '../env.js';
