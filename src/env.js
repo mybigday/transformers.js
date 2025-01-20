@@ -22,6 +22,7 @@
  * @module env
  */
 
+import NativeFS from 'native-universal-fs';
 import fs from 'fs';
 import path from 'path';
 import url from 'url';
@@ -81,8 +82,7 @@ const RUNNING_LOCALLY = IS_FS_AVAILABLE && IS_PATH_AVAILABLE;
 
 let dirname__ = './';
 if (IS_REACT_NATIVE_ENV) {
-    // @ts-ignore
-    dirname__ = fs.DocumentDirectoryPath;
+    dirname__ = NativeFS.DocumentDirectoryPath;
 } else if (RUNNING_LOCALLY) {
     // NOTE: Use eval to avoid SyntaxError and prevent Webpack from bundling it in CommonJS.
     let _import_meta_url = null;
