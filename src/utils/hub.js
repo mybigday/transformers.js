@@ -21,6 +21,7 @@ import { dispatchCallback } from './core.js';
  * @property {import('../configs.js').PretrainedConfig} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
  * - The model is a model provided by the library (loaded with the *model id* string of a pretrained model).
  * - The model is loaded by supplying a local directory as `pretrained_model_name_or_path` and a configuration JSON file named *config.json* is found in the directory.
+ * @property {string} [subfolder=null] If specified, load the model from this subdirectory of the model repository.
  * @property {string} [cache_dir=null] Path to a directory in which a downloaded pretrained model configuration should be cached if the standard cache should not be used.
  * @property {boolean} [local_files_only=false] Whether or not to only look at local files (e.g., not try downloading the model).
  * @property {string} [revision='main'] The specific model version to use. It can be a branch name, a tag name, or a commit id,
