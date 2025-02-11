@@ -101,7 +101,7 @@ function buildConfig({
 
 // Do not bundle onnxruntime-web when packaging for Node.js.
 // Instead, we use the native library (onnxruntime-node).
-const NODE_IGNORE_MODULES = ["onnxruntime-web"];
+const NODE_IGNORE_MODULES = ["onnxruntime-web", "native-universal-fs", "react-native"];
 
 // Do not bundle the following modules with webpack (mark as external)
 // NOTE: This is necessary for both type="module" and type="commonjs",
