@@ -22,7 +22,7 @@ import { env, apis } from '../env.js';
 // In either case, we select the default export if it exists, otherwise we use the named export.
 import * as ONNX_NODE from 'onnxruntime-node';
 import * as ONNX_WEB from 'onnxruntime-web';
-import { Platform } from 'react-native';
+import * as RN from 'react-native';
 
 export { Tensor } from 'onnxruntime-common';
 
@@ -67,10 +67,10 @@ if (ORT_SYMBOL in globalThis) {
 } else if (apis.IS_REACT_NATIVE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
-    if (Platform.OS === 'android') {
+    if (RN?.Platform?.OS === 'android') {
         supportedDevices.push('nnapi', 'xnnpack', 'cpu');
         defaultDevices = ['nnapi', 'cpu'];
-    } else if (Platform.OS === 'ios') {
+    } else if (RN?.Platform?.OS === 'ios') {
         supportedDevices.push('coreml', 'xnnpack', 'cpu');
         defaultDevices = ['coreml', 'cpu'];
     } else {
