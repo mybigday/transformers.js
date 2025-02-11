@@ -27,7 +27,7 @@ import fs from 'fs';
 import path from 'path';
 import url from 'url';
 
-const VERSION = '3.3.1';
+const VERSION = '3.3.3';
 
 // Check if various APIs are available (depends on environment)
 const IS_BROWSER_ENV = typeof window !== "undefined" && typeof window.document !== "undefined";
@@ -84,16 +84,10 @@ let dirname__ = './';
 if (IS_REACT_NATIVE_ENV) {
     dirname__ = NativeFS.DocumentDirectoryPath;
 } else if (RUNNING_LOCALLY) {
-    // NOTE: Use eval to avoid SyntaxError and prevent Webpack from bundling it in CommonJS.
-    let _import_meta_url = null;
-    try {
-        _import_meta_url = eval('import.meta.url');
-    } catch {}
-
-    if (_import_meta_url) {
-        dirname__ = path.dirname(path.dirname(url.fileURLToPath(_import_meta_url))) // ESM
+    if (typeof __filename !== 'undefined') {
+        dirname__ = path.dirname(path.dirname(__filename));
     } else if (typeof __dirname !== 'undefined') {
-        dirname__ = path.dirname(__dirname) // CommonJS
+        dirname__ = path.dirname(__dirname);
     }
 }
 

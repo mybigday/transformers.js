@@ -22,6 +22,7 @@ import { env, apis } from '../env.js';
 // In either case, we select the default export if it exists, otherwise we use the named export.
 import * as ONNX_NODE from 'onnxruntime-node';
 import * as ONNX_WEB from 'onnxruntime-web';
+import { Platform } from 'react-native';
 
 export { Tensor } from 'onnxruntime-common';
 
@@ -57,7 +58,6 @@ const supportedDevices = [];
 /** @type {ONNXExecutionProviders[]} */
 let defaultDevices;
 let ONNX;
-let devicesPromise = Promise.resolve();
 const ORT_SYMBOL = Symbol.for('onnxruntime');
 
 if (ORT_SYMBOL in globalThis) {
@@ -67,18 +67,16 @@ if (ORT_SYMBOL in globalThis) {
 } else if (apis.IS_REACT_NATIVE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
-    devicesPromise = import('react-native').then(({ Platform }) => {
-        if (Platform.OS === 'android') {
-            supportedDevices.push('nnapi', 'xnnpack', 'cpu');
-            defaultDevices = ['nnapi', 'cpu'];
-        } else if (Platform.OS === 'ios') {
-            supportedDevices.push('coreml', 'xnnpack', 'cpu');
-            defaultDevices = ['coreml', 'cpu'];
-        } else {
-            supportedDevices.push('xnnpack', 'cpu');
-            defaultDevices = ['cpu'];
-        }
-    });
+    if (Platform.OS === 'android') {
+        supportedDevices.push('nnapi', 'xnnpack', 'cpu');
+        defaultDevices = ['nnapi', 'cpu'];
+    } else if (Platform.OS === 'ios') {
+        supportedDevices.push('coreml', 'xnnpack', 'cpu');
+        defaultDevices = ['coreml', 'cpu'];
+    } else {
+        supportedDevices.push('xnnpack', 'cpu');
+        defaultDevices = ['cpu'];
+    }
 } else if (apis.IS_NODE_ENV) {
     ONNX = ONNX_NODE.default ?? ONNX_NODE;
 
@@ -126,11 +124,9 @@ const InferenceSession = ONNX.InferenceSession;
 /**
  * Map a device to the execution providers to use for the given device.
  * @param {import("../utils/devices.js").DeviceType|"auto"|null} [device=null] (Optional) The device to run the inference on.
- * @returns {Promise<ONNXExecutionProviders[]>} The execution providers to use for the given device.
+ * @returns {ONNXExecutionProviders[]} The execution providers to use for the given device.
  */
-export async function deviceToExecutionProviders(device = null) {
-    await devicesPromise;
-
+export function deviceToExecutionProviders(device = null) {
     // Use the default execution providers if the user hasn't specified anything
     if (!device) return defaultDevices;
 

@@ -120,7 +120,6 @@ import { apis } from './env.js';
 import { WhisperGenerationConfig } from './models/whisper/generation_whisper.js';
 import { whisper_language_to_code } from './models/whisper/common_whisper.js';
 
-const IS_BROWSER = typeof navigator !== 'undefined' && navigator.product !== 'ReactNative';
 
 //////////////////////////////////////////////////
 // Model types: used internally
@@ -172,7 +171,7 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
     const selectedDevice = /** @type {import("./utils/devices.js").DeviceType} */(
         device ?? (apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV ? 'cpu' : 'wasm')
     );
-    const executionProviders = await deviceToExecutionProviders(selectedDevice);
+    const executionProviders = deviceToExecutionProviders(selectedDevice);
 
     // If options.dtype is specified, we use it to choose the suffix for the model file.
     // Otherwise, we use the default dtype for the device.
@@ -412,7 +411,7 @@ function validateInputs(session, inputs) {
             missingInputs.push(inputName);
             continue;
         }
-        // NOTE: When `onnx_env.wasm.proxy is true` the tensor is moved across the Worker
+        // NOTE: When `env.wasm.proxy is true` the tensor is moved across the Worker
         // boundary, transferring ownership to the worker and invalidating the tensor.
         // So, in this case, we simply sacrifice a clone for it.
         checkedInputs[inputName] = isONNXProxy() ? tensor.clone() : tensor;
