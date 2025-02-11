@@ -1,6 +1,7 @@
 import TerserPlugin from "terser-webpack-plugin";
 import { fileURLToPath } from "url";
 import path from "path";
+import webpack from "webpack";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -85,6 +86,12 @@ function buildConfig({
         },
       },
     };
+
+    config.plugins = [
+      new webpack.DefinePlugin({
+        __filename: 'new URL(import.meta.url).pathname',
+      }),
+    ];
   } else {
     config.externalsType = "commonjs";
   }
