@@ -279,7 +279,7 @@ function fetchBinaryImpl(url, options = {}) {
     });
 }
 
-export const fetchBinary = apis.IS_REACT_NATIVE_ENV ? fetchBinaryImpl : fetch;
+export const fetchBinary = apis.IS_REACT_NATIVE_ENV ? fetchBinaryImpl : globalThis.fetch;
 
 /**
  * Determines whether the given string is a valid URL.
