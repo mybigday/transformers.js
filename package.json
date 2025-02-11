@@ -107,8 +107,7 @@
     "path": false,
     "url": false,
     "sharp": false,
-    "onnxruntime-node": false,
-    "node-wav": false
+    "onnxruntime-node": false
   },
   "publishConfig": {
     "access": "public"
