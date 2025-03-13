@@ -1,6 +1,6 @@
 {
   "name": "@fugood/transformers",
-  "version": "3.3.3-beta.1",
+  "version": "3.4.0-beta.0",
   "description": "State-of-the-art Machine Learning for the web. Run 🤗 Transformers directly in your browser, with no need for a server!",
   "main": "./src/transformers.js",
   "types": "./types/transformers.d.ts",
@@ -9,16 +9,16 @@
     "node": {
       "import": {
         "types": "./types/transformers.d.ts",
-        "default": "./dist/transformers.mjs"
+        "default": "./dist/transformers.node.mjs"
       },
       "require": {
         "types": "./types/transformers.d.ts",
-        "default": "./dist/transformers.cjs"
+        "default": "./dist/transformers.node.cjs"
       }
     },
     "default": {
       "types": "./types/transformers.d.ts",
-      "default": "./dist/transformers.js"
+      "default": "./dist/transformers.web.js"
     }
   },
   "scripts": {
@@ -60,7 +60,7 @@
     "native-universal-fs": "^0.2.0",
     "onnxruntime-node": "1.20.1",
     "onnxruntime-react-native": "1.20.1",
-    "onnxruntime-web": "1.21.0-dev.20250206-d981b153d3",
+    "onnxruntime-web": "1.22.0-dev.20250306-ccf8fdd9ea",
     "sharp": "^0.33.5"
   },
   "optionalDependencies": {
@@ -75,7 +75,7 @@
     "jest-environment-node": "^30.0.0-alpha.6",
     "jsdoc-to-markdown": "^9.1.1",
     "prettier": "3.4.2",
-    "typescript": "^5.7.2",
+    "typescript": "^5.8.2",
     "wavefile": "11.0.0",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
