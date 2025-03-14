@@ -3405,7 +3405,7 @@ export async function pipeline(
         revision = 'main',
         device = null,
         dtype = null,
-        subfolder = 'onnx',
+        subfolder = null,
         use_external_data_format = null,
         model_file_name = null,
         session_options = {},
@@ -3472,6 +3472,7 @@ export async function pipeline(
  * @private
  */
 async function loadItems(mapping, model, pretrainedOptions) {
+    const { subfolder, ...rest } = pretrainedOptions;
 
     const result = Object.create(null);
 
@@ -3479,6 +3480,8 @@ async function loadItems(mapping, model, pretrainedOptions) {
     const promises = [];
     for (const [name, cls] of mapping.entries()) {
         if (!cls) continue;
+
+        const options = name === 'model' ? { ...rest, subfolder: subfolder ?? 'onnx' } : pretrainedOptions;
 
         /**@type {Promise} */
         let promise;
@@ -3493,7 +3496,7 @@ async function loadItems(mapping, model, pretrainedOptions) {
                         return;
                     }
                     try {
-                        resolve(await c.from_pretrained(model, pretrainedOptions));
+                        resolve(await c.from_pretrained(model, options));
                         return;
                     } catch (err) {
                         if (err.message?.includes('Unsupported model type')) {
@@ -3515,7 +3518,7 @@ async function loadItems(mapping, model, pretrainedOptions) {
                 reject(e);
             })
         } else {
-            promise = cls.from_pretrained(model, pretrainedOptions);
+            promise = cls.from_pretrained(model, options);
         }
 
         result[name] = promise;
