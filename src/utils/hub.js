@@ -12,7 +12,6 @@ import { Buffer } from 'buffer';
 
 import { apis, env } from '../env.js';
 import { dispatchCallback } from './core.js';
-import { CLIPVisionModelWithProjection } from '../transformers.js';
 
 
 
