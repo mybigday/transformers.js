@@ -782,7 +782,12 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
         }
         result = buffer;
     } else if (apis.IS_REACT_NATIVE_ENV && return_path) {
-        await downloadFile(remoteURL, cachePath, data => {
+        let targetPath = cachePath;
+        if (cache && env.useFSCache) {
+            targetPath = pathJoin(options.cache_dir ?? env.cacheDir, requestURL);
+        }
+
+        await downloadFile(remoteURL, targetPath, data => {
             dispatchCallback(options.progress_callback, {
                 status: 'progress',
                 name: path_or_repo_id,
@@ -790,7 +795,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
                 ...data,
             })
         });
-        response = await getFile(cachePath);
+        response = await getFile(targetPath);
     }
 
     if (
