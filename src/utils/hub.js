@@ -758,7 +758,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
             })
         });
         response = await getFile(targetPath);
-    } else if (!(apis.IS_NODE_ENV && return_path)) {
+    } else if (!((apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV) && return_path)) {
         /** @type {Uint8Array} */
         let buffer;
 
