@@ -3500,7 +3500,10 @@ async function loadItems(mapping, model, pretrainedOptions) {
                             // If the error is due to an unsupported model type, we
                             // save the error and try the next class.
                             e = err;
-                        } else if (err.message?.includes('Could not locate file')) {
+                        } else if (
+                            err.message?.includes('Could not locate file') ||
+                            err.message?.includes('Unauthorized access to file')
+                        ) {
                             e = err;
                         } else {
                             reject(err);
