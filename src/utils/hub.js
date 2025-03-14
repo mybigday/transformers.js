@@ -12,6 +12,7 @@ import { Buffer } from 'buffer';
 
 import { apis, env } from '../env.js';
 import { dispatchCallback } from './core.js';
+import { CLIPVisionModelWithProjection } from '../transformers.js';
 
 
 
@@ -743,7 +744,22 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
     })
 
     let result;
-    if (!(apis.IS_NODE_ENV && return_path)) {
+    if (apis.IS_REACT_NATIVE_ENV && return_path && !response?.ok) {
+        let targetPath = cachePath;
+        if (cache && env.useFSCache) {
+            targetPath = pathJoin(options.cache_dir ?? env.cacheDir, requestURL);
+        }
+
+        await downloadFile(remoteURL, targetPath, data => {
+            dispatchCallback(options.progress_callback, {
+                status: 'progress',
+                name: path_or_repo_id,
+                file: filename,
+                ...data,
+            })
+        });
+        response = await getFile(targetPath);
+    } else if (!(apis.IS_NODE_ENV && return_path)) {
         /** @type {Uint8Array} */
         let buffer;
 
@@ -781,21 +797,6 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
             })
         }
         result = buffer;
-    } else if (apis.IS_REACT_NATIVE_ENV && return_path) {
-        let targetPath = cachePath;
-        if (cache && env.useFSCache) {
-            targetPath = pathJoin(options.cache_dir ?? env.cacheDir, requestURL);
-        }
-
-        await downloadFile(remoteURL, targetPath, data => {
-            dispatchCallback(options.progress_callback, {
-                status: 'progress',
-                name: path_or_repo_id,
-                file: filename,
-                ...data,
-            })
-        });
-        response = await getFile(targetPath);
     }
 
     if (
