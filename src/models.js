@@ -595,8 +595,8 @@ async function decoderForward(self, model_inputs, is_encoder_decoder = false) {
         new_model_inputs.use_cache_branch = boolTensor(!!past_key_values);
     }
     if (session.inputNames.includes('position_ids') && new_model_inputs.attention_mask && !new_model_inputs.position_ids) {
-        // NOTE: Handle a special case for paligemma models, where positions are 1-indexed
-        const start_index = self.config.model_type === 'paligemma' ? 1 : 0;
+        // NOTE: Handle a special case for paligemma/gemma3 models, where positions are 1-indexed
+        const start_index = ['paligemma', 'gemma3_text', 'gemma3'].includes(self.config.model_type) ? 1 : 0;
         new_model_inputs.position_ids = createPositionIds(new_model_inputs, past_key_values, start_index);
     }
 
@@ -4521,6 +4521,23 @@ export class Gemma2Model extends Gemma2PreTrainedModel { }
 export class Gemma2ForCausalLM extends Gemma2PreTrainedModel { }
 //////////////////////////////////////////////////
 
+
+//////////////////////////////////////////////////
+// Gemma3 models
+
+/**
+ * The bare Gemma3 Model outputting raw hidden-states without any specific head on top.
+ */
+export class Gemma3PreTrainedModel extends PreTrainedModel { }
+/**
+ * The bare Gemma3 Model outputting raw hidden-states without any specific head on top.
+ */
+export class Gemma3Model extends Gemma3PreTrainedModel { }
+
+export class Gemma3ForCausalLM extends Gemma3PreTrainedModel { }
+//////////////////////////////////////////////////
+
+
 //////////////////////////////////////////////////
 export class OpenELMPreTrainedModel extends PreTrainedModel { }
 export class OpenELMModel extends OpenELMPreTrainedModel { }
@@ -5165,6 +5182,37 @@ export class RTDetrObjectDetectionOutput extends ModelOutput {
 }
 //////////////////////////////////////////////////
 
+
+//////////////////////////////////////////////////
+export class RTDetrV2PreTrainedModel extends PreTrainedModel { }
+export class RTDetrV2Model extends RTDetrV2PreTrainedModel { }
+export class RTDetrV2ForObjectDetection extends RTDetrV2PreTrainedModel {
+    /**
+     * @param {any} model_inputs
+     */
+    async _call(model_inputs) {
+        return new RTDetrV2ObjectDetectionOutput(await super._call(model_inputs));
+    }
+}
+
+export class RTDetrV2ObjectDetectionOutput extends RTDetrObjectDetectionOutput {}
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+export class RFDetrPreTrainedModel extends PreTrainedModel { }
+export class RFDetrModel extends RFDetrPreTrainedModel { }
+export class RFDetrForObjectDetection extends RFDetrPreTrainedModel {
+    /**
+     * @param {any} model_inputs
+     */
+    async _call(model_inputs) {
+        return new RFDetrObjectDetectionOutput(await super._call(model_inputs));
+    }
+}
+
+export class RFDetrObjectDetectionOutput extends RTDetrObjectDetectionOutput {}
+//////////////////////////////////////////////////
+
 //////////////////////////////////////////////////
 export class TableTransformerPreTrainedModel extends PreTrainedModel { }
 
@@ -5371,6 +5419,16 @@ export class SapiensForNormalEstimation extends SapiensPreTrainedModel { }
 //////////////////////////////////////////////////
 export class DepthProPreTrainedModel extends PreTrainedModel { }
 export class DepthProForDepthEstimation extends DepthProPreTrainedModel { }
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+export class Metric3DPreTrainedModel extends PreTrainedModel { }
+export class Metric3DForDepthEstimation extends Metric3DPreTrainedModel { }
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+export class Metric3Dv2PreTrainedModel extends PreTrainedModel { }
+export class Metric3Dv2ForDepthEstimation extends Metric3Dv2PreTrainedModel { }
 //////////////////////////////////////////////////
 
 //////////////////////////////////////////////////
@@ -7288,6 +7346,60 @@ export class DacDecoderModel extends DacPreTrainedModel {
 }
 //////////////////////////////////////////////////
 
+
+//////////////////////////////////////////////////
+// Snac models
+export class SnacPreTrainedModel extends PreTrainedModel {
+    main_input_name = 'input_values';
+    forward_params = ['input_values'];
+}
+
+/**
+ * The SNAC (Multi-Scale Neural Audio Codec) model.
+ */
+export class SnacModel extends SnacPreTrainedModel {
+    /**
+     * Encodes the input audio waveform into discrete codes.
+     * @param {Object} inputs Model inputs
+     * @param {Tensor} [inputs.input_values] Float values of the input audio waveform, of shape `(batch_size, channels, sequence_length)`).
+     * @returns {Promise<Record<string, Tensor>>} The output tensors of shape `(batch_size, num_codebooks, sequence_length)`.
+     */
+    async encode(inputs) {
+        return await sessionRun(this.sessions['encoder_model'], inputs);
+    }
+
+    /**
+     * Decodes the given frames into an output audio waveform.
+     * @param {Record<string, Tensor>} inputs The encoded audio codes.
+     * @returns {Promise<{audio_values: Tensor}>} The output tensor of shape `(batch_size, num_channels, sequence_length)`.
+     */
+    async decode(inputs) {
+        return await sessionRun(this.sessions['decoder_model'], inputs);
+    }
+}
+
+export class SnacEncoderModel extends SnacPreTrainedModel {
+    /** @type {typeof PreTrainedModel.from_pretrained} */
+    static async from_pretrained(pretrained_model_name_or_path, options = {}) {
+        return super.from_pretrained(pretrained_model_name_or_path, {
+            ...options,
+            // Update default model file name if not provided
+            model_file_name: options.model_file_name ?? 'encoder_model',
+        });
+    }
+}
+export class SnacDecoderModel extends SnacPreTrainedModel {
+    /** @type {typeof PreTrainedModel.from_pretrained} */
+    static async from_pretrained(pretrained_model_name_or_path, options = {}) {
+        return super.from_pretrained(pretrained_model_name_or_path, {
+            ...options,
+            // Update default model file name if not provided
+            model_file_name: options.model_file_name ?? 'decoder_model',
+        });
+    }
+}
+//////////////////////////////////////////////////
+
 //////////////////////////////////////////////////
 // AutoModels, used to simplify construction of PreTrainedModels
 // (uses config to instantiate correct class)
@@ -7408,6 +7520,8 @@ const MODEL_MAPPING_NAMES_ENCODER_ONLY = new Map([
 
     ['detr', ['DetrModel', DetrModel]],
     ['rt_detr', ['RTDetrModel', RTDetrModel]],
+    ['rt_detr_v2', ['RTDetrV2Model', RTDetrV2Model]],
+    ['rf_detr', ['RFDetrModel', RFDetrModel]],
     ['table-transformer', ['TableTransformerModel', TableTransformerModel]],
     ['vit', ['ViTModel', ViTModel]],
     ['ijepa', ['IJepaModel', IJepaModel]],
@@ -7469,6 +7583,7 @@ const MODEL_MAPPING_NAMES_ENCODER_DECODER = new Map([
 const MODEL_MAPPING_NAMES_AUTO_ENCODER = new Map([
     ['mimi', ['MimiModel', MimiModel]],
     ['dac', ['DacModel', DacModel]],
+    ['snac', ['SnacModel', SnacModel]],
 ]);
 
 const MODEL_MAPPING_NAMES_DECODER_ONLY = new Map([
@@ -7489,6 +7604,7 @@ const MODEL_MAPPING_NAMES_DECODER_ONLY = new Map([
     ['cohere', ['CohereModel', CohereModel]],
     ['gemma', ['GemmaModel', GemmaModel]],
     ['gemma2', ['Gemma2Model', Gemma2Model]],
+    ['gemma3_text', ['Gemma3Model', Gemma3Model]],
     ['helium', ['HeliumModel', HeliumModel]],
     ['glm', ['GlmModel', GlmModel]],
     ['openelm', ['OpenELMModel', OpenELMModel]],
@@ -7588,6 +7704,7 @@ const MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = new Map([
     ['cohere', ['CohereForCausalLM', CohereForCausalLM]],
     ['gemma', ['GemmaForCausalLM', GemmaForCausalLM]],
     ['gemma2', ['Gemma2ForCausalLM', Gemma2ForCausalLM]],
+    ['gemma3_text', ['Gemma3ForCausalLM', Gemma3ForCausalLM]],
     ['helium', ['HeliumForCausalLM', HeliumForCausalLM]],
     ['glm', ['GlmForCausalLM', GlmForCausalLM]],
     ['openelm', ['OpenELMForCausalLM', OpenELMForCausalLM]],
@@ -7704,6 +7821,8 @@ const MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES = new Map([
 const MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES = new Map([
     ['detr', ['DetrForObjectDetection', DetrForObjectDetection]],
     ['rt_detr', ['RTDetrForObjectDetection', RTDetrForObjectDetection]],
+    ['rt_detr_v2', ['RTDetrV2ForObjectDetection', RTDetrV2ForObjectDetection]],
+    ['rf_detr', ['RFDetrForObjectDetection', RFDetrForObjectDetection]],
     ['table-transformer', ['TableTransformerForObjectDetection', TableTransformerForObjectDetection]],
     ['yolos', ['YolosForObjectDetection', YolosForObjectDetection]],
 ]);
@@ -7789,6 +7908,8 @@ const MODEL_FOR_DEPTH_ESTIMATION_MAPPING_NAMES = new Map([
     ['glpn', ['GLPNForDepthEstimation', GLPNForDepthEstimation]],
     ['sapiens', ['SapiensForDepthEstimation', SapiensForDepthEstimation]],
     ['depth_pro', ['DepthProForDepthEstimation', DepthProForDepthEstimation]],
+    ['metric3d', ['Metric3DForDepthEstimation', Metric3DForDepthEstimation]],
+    ['metric3dv2', ['Metric3Dv2ForDepthEstimation', Metric3Dv2ForDepthEstimation]],
 ])
 
 const MODEL_FOR_NORMAL_ESTIMATION_MAPPING_NAMES = new Map([
@@ -7874,6 +7995,8 @@ const CUSTOM_MAPPING = [
     ['DacDecoderModel', DacDecoderModel, MODEL_TYPES.EncoderOnly],
     ['MimiEncoderModel', MimiEncoderModel, MODEL_TYPES.EncoderOnly],
     ['MimiDecoderModel', MimiDecoderModel, MODEL_TYPES.EncoderOnly],
+    ['SnacEncoderModel', SnacEncoderModel, MODEL_TYPES.EncoderOnly],
+    ['SnacDecoderModel', SnacDecoderModel, MODEL_TYPES.EncoderOnly],
 ]
 for (const [name, model, type] of CUSTOM_MAPPING) {
     MODEL_TYPE_MAPPING.set(name, type);

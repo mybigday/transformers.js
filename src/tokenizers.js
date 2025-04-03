@@ -44,6 +44,7 @@ import {
     PriorityQueue,
     TokenLattice,
     CharTrie,
+    DictionarySplitter,
 } from './utils/data-structures.js';
 
 import { Template } from '@huggingface/jinja';
@@ -2599,13 +2600,12 @@ export class PreTrainedTokenizer extends Callable {
             this.decoder.end_of_word_suffix = this.model.end_of_word_suffix;
         }
 
-        this.added_tokens_regex = this.added_tokens.length > 0 ? new RegExp(
-            this.added_tokens.slice()
-                // Sort by length (desc) to avoid early partial matches
-                .sort((a, b) => b.content.length - a.content.length)
-                .map(x => `${x.lstrip ? '\\s*' : ''}(${escapeRegExp(x.content)})${x.rstrip ? '\\s*' : ''}`)
-                .join('|')
-        ) : null;
+        this.added_tokens_splitter = new DictionarySplitter(
+            this.added_tokens.map(x => x.content),
+        );
+
+        /** @type {Map<string, AddedToken>} */
+        this.added_tokens_map = new Map(this.added_tokens.map(x => [x.content, x]))
 
         // Set mask token if present (otherwise will be undefined, which is fine)
         this.mask_token = this.getToken('mask_token');
@@ -2902,40 +2902,50 @@ export class PreTrainedTokenizer extends Callable {
         // Actual function which does encoding, for a single text
         // First, we take care of special tokens. Needed to avoid issues arising from
         // normalization and/or pretokenization (which may not preserve special tokens)
-        const sections = this.added_tokens_regex ? text.split(this.added_tokens_regex).filter(x => x) : [text];
+        const sections = this.added_tokens_splitter.split(text);
 
-        const tokens = sections.map((x, section_index) => {
-            const addedToken = this.added_tokens.find(t => t.content === x);
-            if (addedToken !== undefined) {
-                // Ignore added tokens
-                return x
-            } else {
-                if (this.remove_space === true) {
-                    x = x.trim().split(/\s+/).join(' ');
+        // Process left/right stripping of added tokens
+        for (let i = 0; i < sections.length; ++i) {
+            const addedToken = this.added_tokens_map.get(sections[i]);
+            if (addedToken) {
+                if (addedToken.lstrip && i > 0) {
+                    sections[i - 1] = sections[i - 1].trimEnd();
                 }
-                if (this.do_lowercase_and_remove_accent) {
-                    x = lowercase_and_remove_accent(x);
+                if (addedToken.rstrip && i < sections.length - 1) {
+                    sections[i + 1] = sections[i + 1].trimStart();
                 }
-
-                if (this.normalizer !== null) {
-                    x = this.normalizer(x);
-                }
-
-                // If, after normalization, this section is empty (e.g., trimming whitespace),
-                // we return an empty array
-                if (x.length === 0) {
-                    return [];
-                }
-
-                const sectionTokens = (this.pre_tokenizer !== null) ? this.pre_tokenizer(x, {
-                    section_index,
-                }) : [x];
-
-                const tokens = this.model(sectionTokens);
-
-                return tokens;
             }
-        }).flat();
+        }
+
+        const tokens = sections.flatMap((x, section_index) => {
+            if (x.length === 0) return [];
+            if (this.added_tokens_map.has(x)) return [x]; // Return added tokens unchanged
+
+            if (this.remove_space === true) {
+                x = x.trim().split(/\s+/).join(' ');
+            }
+            if (this.do_lowercase_and_remove_accent) {
+                x = lowercase_and_remove_accent(x);
+            }
+
+            if (this.normalizer !== null) {
+                x = this.normalizer(x);
+            }
+
+            // If, after normalization, this section is empty (e.g., trimming whitespace),
+            // we return an empty array
+            if (x.length === 0) {
+                return [];
+            }
+
+            const sectionTokens = (this.pre_tokenizer !== null) ? this.pre_tokenizer(x, {
+                section_index,
+            }) : [x];
+
+            const tokens = this.model(sectionTokens);
+
+            return tokens;
+        });
 
         return tokens;
     }
