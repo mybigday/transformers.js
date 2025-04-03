@@ -765,9 +765,9 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
 
     let result;
     if (apis.IS_REACT_NATIVE_ENV && return_path && !response?.ok) {
-        let targetPath = cachePath;
+        let targetPath = localPath;
         if (cache && env.useFSCache) {
-            targetPath = pathJoin(options.cache_dir ?? env.cacheDir, requestURL);
+            targetPath = pathJoin(options.cache_dir ?? env.cacheDir, proposedCacheKey);
         }
 
         await downloadFile(remoteURL, targetPath, data => {
