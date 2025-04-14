@@ -56,7 +56,6 @@
   "homepage": "https://github.com/huggingface/transformers.js#readme",
   "dependencies": {
     "@huggingface/jinja": "^0.3.3",
-    "image-codecs": "^0.1.0",
     "native-universal-fs": "^0.2.0",
     "onnxruntime-node": "1.20.1",
     "onnxruntime-react-native": "1.20.1",
@@ -94,7 +93,6 @@
     "onnxruntime-web": false,
     "onnxruntime-node": "onnxruntime-react-native",
     "native-universal-fs": "native-universal-fs",
-    "image-codecs": "image-codecs",
     "sharp": false,
     "path": "path-browserify",
     "stream/web": false
@@ -102,7 +100,6 @@
   "browser": {
     "fs": false,
     "native-universal-fs": false,
-    "image-codecs": false,
     "react-native": false,
     "path": false,
     "url": false,
