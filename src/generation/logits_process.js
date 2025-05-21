@@ -410,7 +410,7 @@ export class NoRepeatNGramLogitsProcessor extends LogitsProcessor {
  * This penalty is applied at most once per token. Note that, for decoder-only models like most LLMs,
  * the considered tokens include the prompt.
  * 
- * In the original [paper](https://arxiv.org/pdf/1909.05858.pdf), the authors suggest the use of a
+ * In the original [paper](https://huggingface.co/papers/1909.05858), the authors suggest the use of a
  * penalty of around 1.2 to achieve a good balance between truthful generation and lack of repetition.
  * To penalize and reduce repetition, use `penalty` values above 1.0, where a higher value penalizes
  * more strongly. To reward and encourage repetition, use `penalty` values between 0.0 and 1.0, where
@@ -548,13 +548,15 @@ export class NoBadWordsLogitsProcessor extends LogitsProcessor {
             const batch_logits_data = /** @type {Float32Array} */(logits[i].data);
             const ids = input_ids[i];
             for (const bad_word_ids of this.bad_words_ids) {
+                // There aren't enough tokens to match the banned sequence
+                if (ids.length < bad_word_ids.length - 1) continue;
+
                 // Whether to modify the logits of the last token in the bad word id sequence
                 let mark = true;
 
                 // For each bad word in the list, if the current sequence of input ids ends with this sequence (excluding the last),
                 // then we set the logits of the last bad word id to -Infinity.
-                for (let j = 1; j <= bad_word_ids.length - 1 && bad_word_ids.length < ids.length; ++j) {
-
+                for (let j = 1; j <= bad_word_ids.length - 1; ++j) {
                     // NOTE: We use != instead of !== to compare bigint and number
                     // @ts-ignore
                     if (bad_word_ids.at(-j - 1) != ids.at(-j)) {
@@ -578,7 +580,7 @@ export class NoBadWordsLogitsProcessor extends LogitsProcessor {
  * correspond to the unconditional logits (predicted from an empty or 'null' prompt). The processor computes a
  * weighted average across the conditional and unconditional logits, parameterised by the `guidance_scale`.
  * 
- * See [the paper](https://arxiv.org/abs/2306.05284) for more information.
+ * See [the paper](https://huggingface.co/papers/2306.05284) for more information.
  */
 export class ClassifierFreeGuidanceLogitsProcessor extends LogitsProcessor {
 

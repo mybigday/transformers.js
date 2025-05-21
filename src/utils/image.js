@@ -14,12 +14,8 @@ import { apis, env } from '../env.js';
 import { Tensor } from './tensor.js';
 import { interpolate_data, permute_data } from './maths.js';
 
-import * as codecs from 'image-codecs';
-import { Buffer } from 'buffer';
-
 // Will be empty (or not used) if running in browser or web-worker
 import sharp from 'sharp';
-import * as NativeFS from 'native-universal-fs';
 
 let createCanvasFunction;
 let ImageDataClass;
@@ -194,10 +190,7 @@ export class RawImage {
             if (env.rnUseCanvas && loadImageFunction) {
                 return await loadImageFunction(url);
             } else {
-                const response = await getFile(url);
-                const buffer = await response.arrayBuffer();
-                const { data, width, height } = codecs.decode(Buffer.from(buffer));
-                return new RawImage(new Uint8ClampedArray(data), width, height, 4);
+                throw new Error('fromURL() is not supported React Native without OffscreenCanvas.');
             }
         } else {
             const response = await getFile(url);
@@ -947,8 +940,8 @@ export class RawImage {
         const mime = CONTENT_TYPE_MAP.get(extension) ?? 'image/png';
 
         if (apis.IS_REACT_NATIVE_ENV) {
-            const buf = Buffer.from(codecs.encode(this.rgba().data, mime));
-            await NativeFS.writeFile(path, buf.toString('base64'), 'base64');
+            throw new Error('save() is not supported in React Native environments.');
+
         } else if (IS_BROWSER_OR_WEBWORKER) {
             if (apis.IS_WEBWORKER_ENV) {
                 throw new Error('Unable to save an image from a Web Worker.')

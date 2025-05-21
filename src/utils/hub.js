@@ -1,7 +1,7 @@
 
 /**
  * @file Utility functions to interact with the Hugging Face Hub (https://huggingface.co/models)
- * 
+ *
  * @module utils/hub
  */
 
@@ -23,7 +23,7 @@ import { dispatchCallback } from './core.js';
 export const MAX_EXTERNAL_DATA_CHUNKS = 100;
 
 /**
- * @typedef {Object} PretrainedOptions Options for loading a pretrained model.     
+ * @typedef {Object} PretrainedOptions Options for loading a pretrained model.
  * @property {import('./core.js').ProgressCallback} [progress_callback=null] If specified, this function will be called during model construction, to provide the user with progress updates.
  * @property {import('../configs.js').PretrainedConfig} [config=null] Configuration for the model to use instead of an automatically loaded configuration. Configuration can be automatically loaded when:
  * - The model is a model provided by the library (loaded with the *model id* string of a pretrained model).
@@ -209,7 +209,7 @@ class FileResponse {
     /**
      * Reads the contents of the file specified by the filePath property and returns a Promise that
      * resolves with a parsed JavaScript object containing the file's contents.
-     * 
+     *
      * @returns {Promise<Object>} A Promise that resolves with a parsed JavaScript object containing the file's contents.
      * @throws {Error} If the file cannot be read.
      */
@@ -329,7 +329,7 @@ const REPO_ID_REGEX = /^(\b[\w\-.]+\b\/)?\b[\w\-.]{1,96}\b$/;
 /**
  * Tests whether a string is a valid Hugging Face model ID or not.
  * Adapted from https://github.com/huggingface/huggingface_hub/blob/6378820ebb03f071988a96c7f3268f5bdf8f9449/src/huggingface_hub/utils/_validators.py#L119-L170
- * 
+ *
  * @param {string} string The string to test
  * @returns {boolean} True if the string is a valid model ID, false otherwise.
  */
@@ -399,9 +399,14 @@ export async function downloadFile(fromUrl, toFile, progress_callback) {
  */
 export async function getFile(urlOrPath) {
 
-    if (env.useFS && !isValidUrl(urlOrPath, ['http:', 'https:', 'blob:'])) {
-        return await FileResponse.create(urlOrPath.toString());
-
+    if (env.useFS && !isValidUrl(urlOrPath, ["http:", "https:", "blob:"])) {
+        return await FileResponse.create(
+          urlOrPath instanceof URL
+            ? urlOrPath.protocol === "file:"
+              ? urlOrPath.pathname
+              : urlOrPath.toString()
+            : urlOrPath,
+        );
     } else if (typeof process !== 'undefined' && process?.release?.name === 'node') {
         const IS_CI = !!process.env?.TESTING_REMOTELY;
         const version = env.version;
@@ -465,7 +470,7 @@ function handleError(status, remoteURL, fatal) {
 class FileCache {
     /**
      * Instantiate a `FileCache` object.
-     * @param {string} path 
+     * @param {string} path
      */
     constructor(path) {
         this.path = path;
@@ -473,7 +478,7 @@ class FileCache {
 
     /**
      * Checks whether the given request is in the cache.
-     * @param {string} request 
+     * @param {string} request
      * @returns {Promise<FileResponse | undefined>}
      */
     async match(request) {
@@ -490,8 +495,8 @@ class FileCache {
 
     /**
      * Adds the given response to the cache.
-     * @param {string} request 
-     * @param {Response} response 
+     * @param {string} request
+     * @param {Response} response
      * @param {(data: {progress: number, loaded: number, total: number}) => void} [progress_callback] Optional.
      * The function to call with progress updates
      * @returns {Promise<void>}
@@ -559,7 +564,7 @@ class FileCache {
 }
 
 /**
- * 
+ *
  * @param {FileCache|Cache} cache The cache to search
  * @param {string[]} names The names of the item to search for
  * @returns {Promise<FileResponse|Response|undefined>} The item from the cache, or undefined if not found.
@@ -613,6 +618,22 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
     // First, check if the a caching backend is available
     // If no caching mechanism available, will download the file every time
     let cache;
+    if (!cache && env.useCustomCache) {
+        // Allow the user to specify a custom cache system.
+        if (!env.customCache) {
+            throw Error('`env.useCustomCache=true`, but `env.customCache` is not defined.')
+        }
+
+        // Check that the required methods are defined:
+        if (!env.customCache.match || !env.customCache.put) {
+            throw new Error(
+                "`env.customCache` must be an object which implements the `match` and `put` functions of the Web Cache API. " +
+                "For more information, see https://developer.mozilla.org/en-US/docs/Web/API/Cache"
+            )
+        }
+        cache = env.customCache;
+    }
+
     if (!cache && env.useBrowserCache) {
         if (typeof caches === 'undefined') {
             throw Error('Browser cache is not available in this environment.')
@@ -630,26 +651,12 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
     }
 
     if (!cache && env.useFSCache) {
-        // TODO throw error if not available
+        if (!apis.IS_FS_AVAILABLE) {
+            throw Error('File System Cache is not available in this environment.');
+        }
 
         // If `cache_dir` is not specified, use the default cache directory
         cache = new FileCache(options.cache_dir ?? env.cacheDir);
-    }
-
-    if (!cache && env.useCustomCache) {
-        // Allow the user to specify a custom cache system.
-        if (!env.customCache) {
-            throw Error('`env.useCustomCache=true`, but `env.customCache` is not defined.')
-        }
-
-        // Check that the required methods are defined:
-        if (!env.customCache.match || !env.customCache.put) {
-            throw new Error(
-                "`env.customCache` must be an object which implements the `match` and `put` functions of the Web Cache API. " +
-                "For more information, see https://developer.mozilla.org/en-US/docs/Web/API/Cache"
-            )
-        }
-        cache = env.customCache;
     }
 
     const revision = options.revision ?? 'main';
@@ -850,7 +857,7 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
     });
 
     if (result) {
-        if (return_path) {
+        if (!apis.IS_NODE_ENV && return_path) {
             throw new Error("Cannot return path in a browser environment.")
         }
         return result;
@@ -859,12 +866,18 @@ export async function getModelFile(path_or_repo_id, filename, fatal = true, opti
         return apis.IS_REACT_NATIVE_ENV ? response.url : response.filePath;
     }
 
-    const cachedResponse = await cache.match(cacheKey);
+    // Otherwise, return the cached response (most likely a `FileResponse`).
+    // NOTE: A custom cache may return a Response, or a string (file path)
+    const cachedResponse = await cache?.match(cacheKey);
     if (cachedResponse instanceof FileResponse) {
         return apis.IS_REACT_NATIVE_ENV ? cachedResponse.url : cachedResponse.filePath;
+    } else if (cachedResponse instanceof Response) {
+        return new Uint8Array(await cachedResponse.arrayBuffer());
+    } else if (typeof cachedResponse === 'string') {
+        return cachedResponse;
     }
-    throw new Error("Unable to return path for response.");
 
+    throw new Error("Unable to get model file path or buffer.");
 }
 
 /**

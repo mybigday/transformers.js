@@ -116,7 +116,7 @@ import { RawImage } from './utils/image.js';
 import { dynamic_time_warping, max, medianFilter } from './utils/maths.js';
 import { EosTokenCriteria, MaxLengthCriteria, StoppingCriteriaList } from './generation/stopping_criteria.js';
 import { LogitsSampler } from './generation/logits_sampler.js';
-import { apis } from './env.js';
+import { apis, env } from './env.js';
 
 import { WhisperGenerationConfig } from './models/whisper/generation_whisper.js';
 import { whisper_language_to_code } from './models/whisper/common_whisper.js';
@@ -159,7 +159,8 @@ const MODEL_CLASS_TO_NAME_MAPPING = new Map();
  * @private
  */
 async function getSession(pretrained_model_name_or_path, fileName, options) {
-    const custom_config = options.config?.['transformers.js_config'] ?? {};
+    let custom_config = options.config?.['transformers.js_config'] ?? {};
+
     let device = options.device ?? custom_config.device;
     if (device && typeof device !== 'string') {
         if (device.hasOwnProperty(fileName)) {
@@ -174,7 +175,17 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
     const selectedDevice = /** @type {import("./utils/devices.js").DeviceType} */(
         device ?? (apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV ? 'cpu' : 'wasm')
     );
+
     const executionProviders = deviceToExecutionProviders(selectedDevice);
+
+    // Update custom config with the selected device's config, if it exists
+    const device_config = custom_config.device_config ?? {};
+    if (device_config.hasOwnProperty(selectedDevice)) {
+        custom_config = {
+            ...custom_config,
+            ...device_config[selectedDevice],
+        };
+    }
 
     // If options.dtype is specified, we use it to choose the suffix for the model file.
     // Otherwise, we use the default dtype for the device.
@@ -196,7 +207,7 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
         }
 
         if (config_dtype && config_dtype !== DATA_TYPES.auto && DATA_TYPES.hasOwnProperty(config_dtype)) {
-            // Defined by the custom config, and is not "auto"
+            // Defined by the config, and is not "auto"
             dtype = config_dtype;
         } else {
             // Choose default dtype based on device, falling back to fp32
@@ -213,10 +224,11 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
     }
 
     // Only valid for models with a decoder
-    const kv_cache_dtype = custom_config.kv_cache_dtype
-        ? (typeof custom_config.kv_cache_dtype === 'string'
-            ? custom_config.kv_cache_dtype
-            : custom_config.kv_cache_dtype[selectedDtype] ?? 'float32')
+    const kv_cache_dtype_config = custom_config.kv_cache_dtype;
+    const kv_cache_dtype = kv_cache_dtype_config
+        ? (typeof kv_cache_dtype_config === 'string'
+            ? kv_cache_dtype_config
+            : kv_cache_dtype_config[selectedDtype] ?? 'float32')
         : undefined;
 
     if (kv_cache_dtype && !['float32', 'float16'].includes(kv_cache_dtype)) {
@@ -226,6 +238,7 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
     const session_config = {
         dtype: selectedDtype,
         kv_cache_dtype,
+        device: selectedDevice,
     }
 
     // Construct the model file name
@@ -244,14 +257,15 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
         session_options.freeDimensionOverrides ??= free_dimension_overrides;
     } else if (selectedDevice.startsWith('webnn') && !session_options.freeDimensionOverrides) {
         console.warn(
-            'WebNN does not currently support dynamic shapes and requires `free_dimension_overrides` to be set in config.json as a field within "transformers.js_config". ' +
-            'When `free_dimension_overrides` is not set, you may experience significant performance degradation.'
+            `WebNN does not currently support dynamic shapes and requires 'free_dimension_overrides' to be set in config.json, preferably as a field within config["transformers.js_config"]["device_config"]["${selectedDevice}"]. ` +
+            `When 'free_dimension_overrides' is not set, you may experience significant performance degradation.`
         );
     }
 
-    const bufferOrPathPromise = getModelFile(pretrained_model_name_or_path, modelFileName, true, options, apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV);
+    const return_path = apis.IS_NODE_ENV && env.useFSCache || apis.IS_REACT_NATIVE_ENV;
+    const bufferOrPathPromise = getModelFile(pretrained_model_name_or_path, modelFileName, true, options, return_path);
 
-    // handle onnx external data files
+    // Handle onnx external data files
     const use_external_data_format = options.use_external_data_format ?? custom_config.use_external_data_format;
     /** @type {Promise<string|{path: string, data: Uint8Array}>[]} */
     let externalDataPromises = [];
@@ -277,7 +291,7 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
             const path = `${baseName}_data${i === 0 ? '' : '_' + i}`;
             const fullPath = `${options.subfolder ?? ''}/${path}`;
             externalDataPromises.push(new Promise(async (resolve, reject) => {
-                const data = await getModelFile(pretrained_model_name_or_path, fullPath, true, options, apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV);
+                const data = await getModelFile(pretrained_model_name_or_path, fullPath, true, options, return_path);
                 resolve(data instanceof Uint8Array ? { path, data } : path);
             }));
         }
@@ -405,6 +419,10 @@ function validateInputs(session, inputs) {
     return checkedInputs;
 }
 
+// Currently, Transformers.js doesn't support simultaneous execution of sessions in WASM/WebGPU.
+// For this reason, we need to chain the inference calls (otherwise we get "Error: Session already started").
+let webInferenceChain = Promise.resolve();
+
 /**
  * Executes an InferenceSession using the specified inputs.
  * NOTE: `inputs` must contain at least the input names of the model.
@@ -421,17 +439,28 @@ async function sessionRun(session, inputs) {
     try {
         // pass the original ort tensor
         const ortFeed = Object.fromEntries(Object.entries(checkedInputs).map(([k, v]) => [k, v.ort_tensor]));
-        let output = await session.run(ortFeed);
-        output = replaceTensors(output);
-        return output;
+        const run = () => session.run(ortFeed);
+        const output = await ((apis.IS_BROWSER_ENV || apis.IS_WEBWORKER_ENV)
+            ? (webInferenceChain = webInferenceChain.then(run))
+            : run());
+        return replaceTensors(output);
     } catch (e) {
         // Error messages can be long (nested) and uninformative. For this reason,
         // we apply minor formatting to show the most important information
         const formatted = Object.fromEntries(Object.entries(checkedInputs)
-            .map(([k, { type, dims, data }]) => [k, {
+            .map(([k, tensor]) => {
                 // Extract these properties from the underlying ORT tensor
-                type, dims, data,
-            }]));
+                const unpacked = {
+                    type: tensor.type,
+                    dims: tensor.dims,
+                    location: tensor.location,
+                }
+                if (unpacked.location !== "gpu-buffer") {
+                    // Only return the data if it's not a GPU buffer
+                    unpacked.data = tensor.data;
+                }
+                return [k, unpacked];
+            }));
 
         // This usually occurs when the inputs are of the wrong type.
         console.error(`An error occurred during model execution: "${e}".`);
@@ -4560,6 +4589,22 @@ export class Qwen2Model extends Qwen2PreTrainedModel { }
 export class Qwen2ForCausalLM extends Qwen2PreTrainedModel { }
 //////////////////////////////////////////////////
 
+
+//////////////////////////////////////////////////
+// Qwen3 models
+
+/**
+ * The bare Qwen3 Model outputting raw hidden-states without any specific head on top.
+ */
+export class Qwen3PreTrainedModel extends PreTrainedModel { }
+/**
+ * The bare Qwen3 Model outputting raw hidden-states without any specific head on top.
+ */
+export class Qwen3Model extends Qwen3PreTrainedModel { }
+
+export class Qwen3ForCausalLM extends Qwen3PreTrainedModel { }
+//////////////////////////////////////////////////
+
 export class Qwen2VLPreTrainedModel extends PreTrainedModel {
     forward_params = [
         // Text inputs
@@ -5195,7 +5240,7 @@ export class RTDetrV2ForObjectDetection extends RTDetrV2PreTrainedModel {
     }
 }
 
-export class RTDetrV2ObjectDetectionOutput extends RTDetrObjectDetectionOutput {}
+export class RTDetrV2ObjectDetectionOutput extends RTDetrObjectDetectionOutput { }
 //////////////////////////////////////////////////
 
 //////////////////////////////////////////////////
@@ -5210,7 +5255,20 @@ export class RFDetrForObjectDetection extends RFDetrPreTrainedModel {
     }
 }
 
-export class RFDetrObjectDetectionOutput extends RTDetrObjectDetectionOutput {}
+export class RFDetrObjectDetectionOutput extends RTDetrObjectDetectionOutput { }
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+export class DFinePreTrainedModel extends PreTrainedModel { }
+export class DFineModel extends DFinePreTrainedModel { }
+export class DFineForObjectDetection extends DFinePreTrainedModel {
+    /**
+     * @param {any} model_inputs
+     */
+    async _call(model_inputs) {
+        return new RTDetrObjectDetectionOutput(await super._call(model_inputs));
+    }
+}
 //////////////////////////////////////////////////
 
 //////////////////////////////////////////////////
@@ -6996,7 +7054,7 @@ export class DecisionTransformerPreTrainedModel extends PreTrainedModel { }
 
 /**
  * The model builds upon the GPT2 architecture to perform autoregressive prediction of actions in an offline RL setting.
- * Refer to the paper for more details: https://arxiv.org/abs/2106.01345
+ * Refer to the paper for more details: https://huggingface.co/papers/2106.01345
  */
 export class DecisionTransformerModel extends DecisionTransformerPreTrainedModel { }
 
@@ -7522,6 +7580,7 @@ const MODEL_MAPPING_NAMES_ENCODER_ONLY = new Map([
     ['rt_detr', ['RTDetrModel', RTDetrModel]],
     ['rt_detr_v2', ['RTDetrV2Model', RTDetrV2Model]],
     ['rf_detr', ['RFDetrModel', RFDetrModel]],
+    ['d_fine', ['DFineModel', DFineModel]],
     ['table-transformer', ['TableTransformerModel', TableTransformerModel]],
     ['vit', ['ViTModel', ViTModel]],
     ['ijepa', ['IJepaModel', IJepaModel]],
@@ -7609,6 +7668,7 @@ const MODEL_MAPPING_NAMES_DECODER_ONLY = new Map([
     ['glm', ['GlmModel', GlmModel]],
     ['openelm', ['OpenELMModel', OpenELMModel]],
     ['qwen2', ['Qwen2Model', Qwen2Model]],
+    ['qwen3', ['Qwen3Model', Qwen3Model]],
     ['phi', ['PhiModel', PhiModel]],
     ['phi3', ['Phi3Model', Phi3Model]],
     ['mpt', ['MptModel', MptModel]],
@@ -7709,6 +7769,7 @@ const MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = new Map([
     ['glm', ['GlmForCausalLM', GlmForCausalLM]],
     ['openelm', ['OpenELMForCausalLM', OpenELMForCausalLM]],
     ['qwen2', ['Qwen2ForCausalLM', Qwen2ForCausalLM]],
+    ['qwen3', ['Qwen3ForCausalLM', Qwen3ForCausalLM]],
     ['phi', ['PhiForCausalLM', PhiForCausalLM]],
     ['phi3', ['Phi3ForCausalLM', Phi3ForCausalLM]],
     ['mpt', ['MptForCausalLM', MptForCausalLM]],
@@ -7823,6 +7884,7 @@ const MODEL_FOR_OBJECT_DETECTION_MAPPING_NAMES = new Map([
     ['rt_detr', ['RTDetrForObjectDetection', RTDetrForObjectDetection]],
     ['rt_detr_v2', ['RTDetrV2ForObjectDetection', RTDetrV2ForObjectDetection]],
     ['rf_detr', ['RFDetrForObjectDetection', RFDetrForObjectDetection]],
+    ['d_fine', ['DFineForObjectDetection', DFineForObjectDetection]],
     ['table-transformer', ['TableTransformerForObjectDetection', TableTransformerForObjectDetection]],
     ['yolos', ['YolosForObjectDetection', YolosForObjectDetection]],
 ]);
