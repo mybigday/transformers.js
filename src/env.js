@@ -25,7 +25,6 @@
 import * as NativeFS from 'native-universal-fs';
 import fs from 'node:fs';
 import path from 'node:path';
-import url from 'node:url';
 
 const VERSION = '3.6.1';
 
