@@ -1,6 +1,6 @@
 {
   "name": "@huggingface/transformers",
-  "version": "3.5.1",
+  "version": "3.6.1",
   "description": "State-of-the-art Machine Learning for the web. Run 🤗 Transformers directly in your browser, with no need for a server!",
   "main": "./src/transformers.js",
   "types": "./types/transformers.d.ts",
@@ -96,15 +96,6 @@
     "sharp": false,
     "path": "path-browserify",
     "stream/web": false
-  },
-  "browser": {
-    "fs": false,
-    "native-universal-fs": false,
-    "react-native": false,
-    "path": false,
-    "url": false,
-    "sharp": false,
-    "onnxruntime-node": false
   },
   "publishConfig": {
     "access": "public"
