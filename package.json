@@ -1,6 +1,6 @@
 {
   "name": "@fugood/transformers",
-  "version": "3.5.1-beta.1",
+  "version": "3.6.1",
   "description": "State-of-the-art Machine Learning for the web. Run 🤗 Transformers directly in your browser, with no need for a server!",
   "main": "./src/transformers.js",
   "types": "./types/transformers.d.ts",
@@ -9,15 +9,18 @@
     "node": {
       "import": {
         "types": "./types/transformers.d.ts",
+        "react-native": "./dist/transformers.native.mjs",
         "default": "./dist/transformers.node.mjs"
       },
       "require": {
         "types": "./types/transformers.d.ts",
+        "react-native": "./dist/transformers.native.cjs",
         "default": "./dist/transformers.node.cjs"
       }
     },
     "default": {
       "types": "./types/transformers.d.ts",
+      "react-native": "./dist/transformers.native.mjs",
       "default": "./dist/transformers.web.js"
     }
   },
@@ -58,12 +61,9 @@
     "@huggingface/jinja": "^0.4.1",
     "native-universal-fs": "^0.2.0",
     "onnxruntime-node": "1.21.0",
-    "onnxruntime-react-native": "1.21.0",
+    "onnxruntime-react-native": "1.22.0",
     "onnxruntime-web": "1.22.0-dev.20250409-89f8206ba4",
     "sharp": "^0.34.1"
-  },
-  "optionalDependencies": {
-    "path-browserify": "^1.0.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
@@ -73,6 +73,7 @@
     "jest": "^30.0.0-alpha.6",
     "jest-environment-node": "^30.0.0-alpha.6",
     "jsdoc-to-markdown": "^9.1.1",
+    "path-browserify": "^1.0.1",
     "prettier": "3.4.2",
     "typescript": "^5.8.2",
     "wavefile": "11.0.0",
@@ -87,25 +88,6 @@
     "README.md",
     "LICENSE"
   ],
-  "react-native": {
-    "react-native": "react-native",
-    "fs": false,
-    "onnxruntime-web": false,
-    "onnxruntime-node": "onnxruntime-react-native",
-    "native-universal-fs": "native-universal-fs",
-    "sharp": false,
-    "path": "path-browserify",
-    "stream/web": false
-  },
-  "browser": {
-    "fs": false,
-    "native-universal-fs": false,
-    "react-native": false,
-    "path": false,
-    "url": false,
-    "sharp": false,
-    "onnxruntime-node": false
-  },
   "publishConfig": {
     "access": "public"
   },

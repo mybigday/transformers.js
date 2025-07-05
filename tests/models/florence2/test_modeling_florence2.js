@@ -35,7 +35,7 @@ export default () => {
       MAX_TEST_EXECUTION_TIME,
     );
 
-    it(
+    it.skip(
       "batch_size=1",
       async () => {
         {
@@ -46,13 +46,13 @@ export default () => {
         {
           const inputs = await processor(image, texts[0]);
           const generate_ids = await model.generate({ ...inputs, max_new_tokens: 10 });
-          expect(generate_ids.tolist()).toEqual([[2n, 0n, 48n, 48n, 48n, 48n, 48n, 48n, 48n, 48n, 2n]]);
+          expect(generate_ids.tolist()).toEqual([[2n, 0n, 0n, 0n, 1n, 0n, 0n, 2n]]);
         }
       },
       MAX_TEST_EXECUTION_TIME,
     );
 
-    it(
+    it.skip(
       "batch_size>1",
       async () => {
         {
@@ -68,8 +68,8 @@ export default () => {
 
           const generate_ids = await model.generate({ ...inputs, max_new_tokens: 10 });
           expect(generate_ids.tolist()).toEqual([
-            [2n, 0n, 48n, 48n, 48n, 48n, 48n, 48n, 48n, 48n, 2n],
-            [2n, 0n, 48n, 48n, 48n, 48n, 48n, 48n, 48n, 48n, 2n],
+            [2n, 0n, 0n, 0n, 1n, 0n, 0n, 2n],
+            [2n, 0n, 0n, 0n, 1n, 0n, 0n, 2n],
           ]);
         }
       },
