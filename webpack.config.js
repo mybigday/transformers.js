@@ -81,6 +81,7 @@ function buildConfig({
   aliasModules = {},
   plugins = [],
 } = {}) {
+  const isRN = name === ".native";
   const outputModule = type === "module";
   const alias = {
     ...Object.fromEntries(
@@ -89,7 +90,7 @@ function buildConfig({
     ...aliasModules,
   };
   const importsFields = [
-    name === ".native" && "react-native",
+    isRN && "react-native",
     "browser",
     "module",
     "main",
@@ -159,11 +160,13 @@ function buildConfig({
       },
     };
 
-    config.plugins.push(
-      new webpack.DefinePlugin({
-        __filename: 'new URL(import.meta.url).pathname',
-      }),
-    );
+    if (!isRN) {
+      config.plugins.push(
+        new webpack.DefinePlugin({
+          __filename: 'new URL(import.meta.url).pathname',
+        }),
+      );
+    }
   } else {
     config.externalsType = "commonjs";
   }
