@@ -47,7 +47,7 @@ npm i @huggingface/transformers
 Alternatively, you can use it in vanilla JS, without any bundler, by using a CDN or static hosting. For example, using [ES Modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules), you can import the library with:
 ```html
 <script type="module">
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.6.1';
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.6.3';
 </script>
 ```
 
@@ -155,7 +155,7 @@ Check out the Transformers.js [template](https://huggingface.co/new-space?templa
 
 
 
-By default, Transformers.js uses [hosted pretrained models](https://huggingface.co/models?library=transformers.js) and [precompiled WASM binaries](https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.6.1/dist/), which should work out-of-the-box. You can customize this as follows:
+By default, Transformers.js uses [hosted pretrained models](https://huggingface.co/models?library=transformers.js) and [precompiled WASM binaries](https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.6.3/dist/), which should work out-of-the-box. You can customize this as follows:
 
 ### Settings
 
@@ -416,6 +416,7 @@ You can refine your search by selecting the task you're interested in (e.g., [te
 1. **[SegFormer](https://huggingface.co/docs/transformers/model_doc/segformer)** (from NVIDIA) released with the paper [SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers](https://huggingface.co/papers/2105.15203) by Enze Xie, Wenhai Wang, Zhiding Yu, Anima Anandkumar, Jose M. Alvarez, Ping Luo.
 1. **[Segment Anything](https://huggingface.co/docs/transformers/model_doc/sam)** (from Meta AI) released with the paper [Segment Anything](https://huggingface.co/papers/2304.02643v1.pdf) by Alexander Kirillov, Eric Mintun, Nikhila Ravi, Hanzi Mao, Chloe Rolland, Laura Gustafson, Tete Xiao, Spencer Whitehead, Alex Berg, Wan-Yen Lo, Piotr Dollar, Ross Girshick.
 1. **[SigLIP](https://huggingface.co/docs/transformers/main/model_doc/siglip)** (from Google AI) released with the paper [Sigmoid Loss for Language Image Pre-Training](https://huggingface.co/papers/2303.15343) by Xiaohua Zhai, Basil Mustafa, Alexander Kolesnikov, Lucas Beyer.
+1. **[SmolLM3](https://huggingface.co/docs/transformers/main/model_doc/smollm3) (from Hugging Face) released with the blog post [SmolLM3: smol, multilingual, long-context reasoner](https://huggingface.co/blog/smollm3) by the Hugging Face TB Research team.
 1. **[SmolVLM](https://huggingface.co/docs/transformers/main/model_doc/smolvlm) (from Hugging Face) released with the blog posts [SmolVLM - small yet mighty Vision Language Model](https://huggingface.co/blog/smolvlm) and [SmolVLM Grows Smaller – Introducing the 250M & 500M Models!](https://huggingface.co/blog/smolervlm) by the Hugging Face TB Research team.
 1. **SNAC** (from Papla Media, ETH Zurich) released with the paper [SNAC: Multi-Scale Neural Audio Codec](https://huggingface.co/papers/2410.14411) by Hubert Siuzdak, Florian Grötschla, Luca A. Lanzendörfer.
 1. **[SpeechT5](https://huggingface.co/docs/transformers/model_doc/speecht5)** (from Microsoft Research) released with the paper [SpeechT5: Unified-Modal Encoder-Decoder Pre-Training for Spoken Language Processing](https://huggingface.co/papers/2110.07205) by Junyi Ao, Rui Wang, Long Zhou, Chengyi Wang, Shuo Ren, Yu Wu, Shujie Liu, Tom Ko, Qing Li, Yu Zhang, Zhihua Wei, Yao Qian, Jinyu Li, Furu Wei.
