@@ -1,6 +1,6 @@
 {
   "name": "@fugood/transformers",
-  "version": "3.6.1-beta.1",
+  "version": "3.6.3",
   "description": "State-of-the-art Machine Learning for the web. Run 🤗 Transformers directly in your browser, with no need for a server!",
   "main": "./src/transformers.js",
   "types": "./types/transformers.d.ts",
@@ -58,7 +58,7 @@
   },
   "homepage": "https://github.com/huggingface/transformers.js#readme",
   "dependencies": {
-    "@huggingface/jinja": "^0.4.1",
+    "@huggingface/jinja": "^0.5.1",
     "native-universal-fs": "^0.2.0",
     "onnxruntime-node": "1.21.0",
     "onnxruntime-react-native": "1.22.0",
