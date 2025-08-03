@@ -40,7 +40,7 @@
 
 import {
     AutoConfig,
-    getKeyValueShapes,
+    getCacheShapes,
 } from './configs.js';
 
 import {
@@ -319,7 +319,7 @@ async function getSession(pretrained_model_name_or_path, fileName, options) {
     }
 
     if (selectedDevice === 'webgpu') {
-        const shapes = getKeyValueShapes(options.config, {
+        const shapes = getCacheShapes(options.config, {
             prefix: 'present',
         });
         if (Object.keys(shapes).length > 0 && !isONNXProxy()) {
@@ -1961,7 +1961,9 @@ export class PreTrainedModel extends Callable {
 
         for (const name in decoderResults) {
             if (name.startsWith('present')) {
-                const newName = name.replace('present', 'past_key_values');
+                const newName = name
+                    .replace('present_conv', 'past_conv') // Hybrid cache architecture (e.g., LFM2)
+                    .replace('present', 'past_key_values');
                 const is_encoder_pkv = name.includes('encoder');
                 if (is_encoder_pkv && pastKeyValues) {
                     // Optimization introduced by optimum to reuse past key values.
@@ -2018,14 +2020,14 @@ export class PreTrainedModel extends Callable {
             Object.assign(decoderFeeds, pastKeyValues)
         } else {
             const session = this.sessions['decoder_model_merged'] ?? this.sessions['model'];
-            const dtype = session?.config?.kv_cache_dtype ?? 'float32';
-            const empty = (dtype === 'float16') ? new DataTypeMap.float16() : [];
-
             const batch_size = (decoderFeeds[this.main_input_name] ?? decoderFeeds.attention_mask)?.dims?.[0] ?? 1;
-            const shapes = getKeyValueShapes(this.config, { batch_size });
 
+            const dtype = session?.config?.kv_cache_dtype ?? 'float32';
+            const cls = (dtype === 'float16') ? DataTypeMap.float16 : DataTypeMap.float32;
+            const shapes = getCacheShapes(this.config, { batch_size });
             for (const name in shapes) {
-                decoderFeeds[name] = new Tensor(dtype, empty, shapes[name]);
+                const size = shapes[name].reduce((a, b) => a * b, 1);
+                decoderFeeds[name] = new Tensor(dtype, new cls(size), shapes[name]);
             }
         }
     }
@@ -2229,6 +2231,12 @@ export class ModernBertForTokenClassification extends ModernBertPreTrainedModel 
 }
 //////////////////////////////////////////////////
 
+//////////////////////////////////////////////////
+// ModernBERT Decoder models
+export class ModernBertDecoderPreTrainedModel extends PreTrainedModel { }
+export class ModernBertDecoderModel extends ModernBertDecoderPreTrainedModel { }
+export class ModernBertDecoderForCausalLM extends ModernBertDecoderPreTrainedModel { }
+//////////////////////////////////////////////////
 
 //////////////////////////////////////////////////
 // NomicBert models
@@ -4585,6 +4593,20 @@ export class LlamaPreTrainedModel extends PreTrainedModel { }
 export class LlamaModel extends LlamaPreTrainedModel { }
 
 export class LlamaForCausalLM extends LlamaPreTrainedModel { }
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+// Arcee models
+export class ArceePreTrainedModel extends PreTrainedModel { }
+export class ArceeModel extends ArceePreTrainedModel { }
+export class ArceeForCausalLM extends ArceePreTrainedModel { }
+//////////////////////////////////////////////////
+
+//////////////////////////////////////////////////
+// LFM2 models
+export class Lfm2PreTrainedModel extends PreTrainedModel { }
+export class Lfm2Model extends Lfm2PreTrainedModel { }
+export class Lfm2ForCausalLM extends Lfm2PreTrainedModel { }
 //////////////////////////////////////////////////
 
 //////////////////////////////////////////////////
@@ -7393,13 +7415,15 @@ export class UltravoxModel extends UltravoxPreTrainedModel {
 
         return default_merge_input_ids_with_audio_features({
             // @ts-ignore
-            audio_token_id: this.config.ignore_index,
+            audio_token_id: this.config.ignore_index ?? this.config.audio_token_id,
             ...kwargs,
             audio_features: reshaped_audio_features,
         })
     }
 }
 //////////////////////////////////////////////////
+
+export class VoxtralForConditionalGeneration extends UltravoxModel { }
 
 //////////////////////////////////////////////////
 // Mimi models
@@ -7804,6 +7828,8 @@ const MODEL_MAPPING_NAMES_DECODER_ONLY = new Map([
     ['gpt_neox', ['GPTNeoXModel', GPTNeoXModel]],
     ['codegen', ['CodeGenModel', CodeGenModel]],
     ['llama', ['LlamaModel', LlamaModel]],
+    ['arcee', ['ArceeModel', ArceeModel]],
+    ['lfm2', ['Lfm2Model', Lfm2Model]],
     ['smollm3', ['SmolLM3Model', SmolLM3Model]],
     ['exaone', ['ExaoneModel', ExaoneModel]],
     ['olmo', ['OlmoModel', OlmoModel]],
@@ -7828,6 +7854,7 @@ const MODEL_MAPPING_NAMES_DECODER_ONLY = new Map([
     ['starcoder2', ['Starcoder2Model', Starcoder2Model]],
     ['falcon', ['FalconModel', FalconModel]],
     ['stablelm', ['StableLmModel', StableLmModel]],
+    ['modernbert-decoder', ['ModernBertDecoderModel', ModernBertDecoderModel]],
 ]);
 
 const MODEL_FOR_SPEECH_SEQ_2_SEQ_MAPPING_NAMES = new Map([
@@ -7909,6 +7936,8 @@ const MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = new Map([
     ['gpt_neox', ['GPTNeoXForCausalLM', GPTNeoXForCausalLM]],
     ['codegen', ['CodeGenForCausalLM', CodeGenForCausalLM]],
     ['llama', ['LlamaForCausalLM', LlamaForCausalLM]],
+    ['arcee', ['ArceeForCausalLM', ArceeForCausalLM]],
+    ['lfm2', ['Lfm2ForCausalLM', Lfm2ForCausalLM]],
     ['smollm3', ['SmolLM3ForCausalLM', SmolLM3ForCausalLM]],
     ['exaone', ['ExaoneForCausalLM', ExaoneForCausalLM]],
     ['olmo', ['OlmoForCausalLM', OlmoForCausalLM]],
@@ -7935,6 +7964,7 @@ const MODEL_FOR_CAUSAL_LM_MAPPING_NAMES = new Map([
     ['falcon', ['FalconForCausalLM', FalconForCausalLM]],
     ['trocr', ['TrOCRForCausalLM', TrOCRForCausalLM]],
     ['stablelm', ['StableLmForCausalLM', StableLmForCausalLM]],
+    ['modernbert-decoder', ['ModernBertDecoderForCausalLM', ModernBertDecoderForCausalLM]],
 
     // Also image-text-to-text
     ['phi3_v', ['Phi3VForCausalLM', Phi3VForCausalLM]],
@@ -8006,6 +8036,7 @@ const MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES = new Map([
 
 const MODEL_FOR_AUDIO_TEXT_TO_TEXT_MAPPING_NAMES = new Map([
     ['ultravox', ['UltravoxModel', UltravoxModel]],
+    ['voxtral', ['VoxtralForConditionalGeneration', VoxtralForConditionalGeneration]],
 ]);
 
 
