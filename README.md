@@ -47,7 +47,7 @@ npm i @huggingface/transformers
 Alternatively, you can use it in vanilla JS, without any bundler, by using a CDN or static hosting. For example, using [ES Modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules), you can import the library with:
 ```html
 <script type="module">
-    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.0';
+    import { pipeline } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.1';
 </script>
 ```
 
@@ -155,7 +155,7 @@ Check out the Transformers.js [template](https://huggingface.co/new-space?templa
 
 
 
-By default, Transformers.js uses [hosted pretrained models](https://huggingface.co/models?library=transformers.js) and [precompiled WASM binaries](https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.0/dist/), which should work out-of-the-box. You can customize this as follows:
+By default, Transformers.js uses [hosted pretrained models](https://huggingface.co/models?library=transformers.js) and [precompiled WASM binaries](https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.1/dist/), which should work out-of-the-box. You can customize this as follows:
 
 ### Settings
 
@@ -288,6 +288,7 @@ You can refine your search by selecting the task you're interested in (e.g., [te
 ### Models
 
 1. **[ALBERT](https://huggingface.co/docs/transformers/model_doc/albert)** (from Google Research and the Toyota Technological Institute at Chicago) released with the paper [ALBERT: A Lite BERT for Self-supervised Learning of Language Representations](https://huggingface.co/papers/1909.11942), by Zhenzhong Lan, Mingda Chen, Sebastian Goodman, Kevin Gimpel, Piyush Sharma, Radu Soricut.
+1. **[Arcee](https://huggingface.co/docs/transformers/model_doc/arcee)** (from Arcee AI) released with the blog post [Announcing Arcee Foundation Models](https://www.arcee.ai/blog/announcing-the-arcee-foundation-model-family) by Fernando Fernandes, Varun Singh, Charles Goddard, Lucas Atkins, Mark McQuade, Maziyar Panahi, Conner Stewart, Colin Kealty, Raghav Ravishankar, Lucas Krauss, Anneketh Vij, Pranav Veldurthi, Abhishek Thakur, Julien Simon, Scott Zembsch, Benjamin Langer, Aleksiej Cecocho, Maitri Patel.
 1. **[Audio Spectrogram Transformer](https://huggingface.co/docs/transformers/model_doc/audio-spectrogram-transformer)** (from MIT) released with the paper [AST: Audio Spectrogram Transformer](https://huggingface.co/papers/2104.01778) by Yuan Gong, Yu-An Chung, James Glass.
 1. **[BART](https://huggingface.co/docs/transformers/model_doc/bart)** (from Facebook) released with the paper [BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension](https://huggingface.co/papers/1910.13461) by Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Ves Stoyanov and Luke Zettlemoyer.
 1. **[BEiT](https://huggingface.co/docs/transformers/model_doc/beit)** (from Microsoft) released with the paper [BEiT: BERT Pre-Training of Image Transformers](https://huggingface.co/papers/2106.08254) by Hangbo Bao, Li Dong, Furu Wei.
