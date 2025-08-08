@@ -4,6 +4,7 @@
   "description": "State-of-the-art Machine Learning for the web. Run 🤗 Transformers directly in your browser, with no need for a server!",
   "main": "./src/transformers.js",
   "types": "./types/transformers.d.ts",
+  "react-native": "./dist/transformers.native.mjs",
   "type": "module",
   "exports": {
     "node": {
