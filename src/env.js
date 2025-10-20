@@ -26,7 +26,7 @@ import * as NativeFS from 'native-universal-fs';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const VERSION = '3.7.1';
+const VERSION = '3.7.5';
 
 // Check if various APIs are available (depends on environment)
 const IS_BROWSER_ENV = typeof window !== "undefined" && typeof window.document !== "undefined";
