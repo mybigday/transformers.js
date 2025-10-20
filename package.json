@@ -1,6 +1,6 @@
 {
   "name": "@fugood/transformers",
-  "version": "3.7.2-beta.0",
+  "version": "3.7.5",
   "description": "State-of-the-art Machine Learning for the web. Run 🤗 Transformers directly in your browser, with no need for a server!",
   "main": "./src/transformers.js",
   "types": "./types/transformers.d.ts",
