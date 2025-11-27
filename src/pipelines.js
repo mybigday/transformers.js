@@ -75,9 +75,6 @@ import {
     topk,
 } from './utils/tensor.js';
 import { RawImage } from './utils/image.js';
-import {
-    fetchBinary
-} from './utils/hub.js';
 
 
 /**
@@ -2795,6 +2792,9 @@ export class DocumentQuestionAnsweringPipeline extends (/** @type {new (options:
  *
  * @typedef {Object} TextToAudioPipelineOptions Parameters specific to text-to-audio pipelines.
  * @property {Tensor|Float32Array|string|URL} [speaker_embeddings=null] The speaker embeddings (if the model requires it).
+ * @property {number} [num_inference_steps] The number of denoising steps (if the model supports it).
+ * More denoising steps usually lead to higher quality audio but slower inference.
+ * @property {number} [speed] The speed of the generated audio (if the model supports it).
  *
  * @callback TextToAudioPipelineCallback Generates speech/audio from the inputs.
  * @param {string|string[]} texts The text(s) to generate.
@@ -2808,31 +2808,24 @@ export class DocumentQuestionAnsweringPipeline extends (/** @type {new (options:
  * Text-to-audio generation pipeline using any `AutoModelForTextToWaveform` or `AutoModelForTextToSpectrogram`.
  * This pipeline generates an audio file from an input text and optional other conditional inputs.
  *
- * **Example:** Generate audio from text with `Xenova/speecht5_tts`.
+ * **Example:** Generate audio from text with `onnx-community/Supertonic-TTS-ONNX`.
  * ```javascript
- * const synthesizer = await pipeline('text-to-speech', 'Xenova/speecht5_tts', { quantized: false });
- * const speaker_embeddings = 'https://huggingface.co/datasets/Xenova/transformers.js-docs/resolve/main/speaker_embeddings.bin';
- * const out = await synthesizer('Hello, my dog is cute', { speaker_embeddings });
+ * const synthesizer = await pipeline('text-to-speech', 'onnx-community/Supertonic-TTS-ONNX');
+ * const speaker_embeddings = 'https://huggingface.co/onnx-community/Supertonic-TTS-ONNX/resolve/main/voices/F1.bin';
+ * const output = await synthesizer('Hello there, how are you doing?', { speaker_embeddings });
  * // RawAudio {
- * //   audio: Float32Array(26112) [-0.00005657337896991521, 0.00020583874720614403, ...],
- * //   sampling_rate: 16000
+ * //   audio: Float32Array(95232) [-0.000482565927086398, -0.0004853440332226455, ...],
+ * //   sampling_rate: 44100
  * // }
- * ```
- *
- * You can then save the audio to a .wav file with the `wavefile` package:
- * ```javascript
- * import wavefile from 'wavefile';
- * import fs from 'fs';
- *
- * const wav = new wavefile.WaveFile();
- * wav.fromScratch(1, out.sampling_rate, '32f', out.audio);
- * fs.writeFileSync('out.wav', wav.toBuffer());
+ * 
+ * // Optional: Save the audio to a .wav file or Blob
+ * await output.save('output.wav'); // You can also use `output.toBlob()` to access the audio as a Blob
  * ```
  *
  * **Example:** Multilingual speech generation with `Xenova/mms-tts-fra`. See [here](https://huggingface.co/models?pipeline_tag=text-to-speech&other=vits&sort=trending) for the full list of available languages (1107).
  * ```javascript
  * const synthesizer = await pipeline('text-to-speech', 'Xenova/mms-tts-fra');
- * const out = await synthesizer('Bonjour');
+ * const output = await synthesizer('Bonjour');
  * // RawAudio {
  * //   audio: Float32Array(23808) [-0.00037693005288019776, 0.0003325853613205254, ...],
  * //   sampling_rate: 16000
@@ -2853,30 +2846,83 @@ export class TextToAudioPipeline extends (/** @type {new (options: TextToAudioPi
         this.vocoder = options.vocoder ?? null;
     }
 
+    async _prepare_speaker_embeddings(speaker_embeddings) {
+        // Load speaker embeddings as Float32Array from path/URL
+        if (typeof speaker_embeddings === 'string' || speaker_embeddings instanceof URL) {
+            // Load from URL with fetch
+            speaker_embeddings = new Float32Array(
+                await (await fetch(speaker_embeddings)).arrayBuffer()
+            );
+        }
+
+        if (speaker_embeddings instanceof Float32Array) {
+            speaker_embeddings = new Tensor(
+                'float32',
+                speaker_embeddings,
+                [speaker_embeddings.length]
+            )
+        } else if (!(speaker_embeddings instanceof Tensor)) {
+            throw new Error("Speaker embeddings must be a `Tensor`, `Float32Array`, `string`, or `URL`.")
+        }
+
+        return speaker_embeddings;
+    }
 
     /** @type {TextToAudioPipelineCallback} */
     async _call(text_inputs, {
         speaker_embeddings = null,
+        num_inference_steps,
+        speed,
     } = {}) {
 
-        if (AutoModelForTextToSpectrogram.MODEL_CLASS_MAPPINGS[0].has(this.model.config.model_type)) {
+        // If this.processor is not set, we are using a `AutoModelForTextToWaveform` model
+        if (this.processor) {
             return this._call_text_to_spectrogram(text_inputs, { speaker_embeddings });
+        } else if (
+            this.model.config.model_type === "supertonic"
+        ) {
+            return this._call_supertonic(text_inputs, { speaker_embeddings, num_inference_steps, speed });
         } else {
             return this._call_text_to_waveform(text_inputs);
         }
     }
 
+    async _call_supertonic(text_inputs, { speaker_embeddings, num_inference_steps, speed }) {
+        if (!speaker_embeddings) {
+            throw new Error("Speaker embeddings must be provided for Supertonic models.");
+        }
+        speaker_embeddings = await this._prepare_speaker_embeddings(speaker_embeddings);
+
+        // @ts-expect-error TS2339
+        const { sampling_rate, style_dim } = this.model.config;
+
+        speaker_embeddings = (/** @type {Tensor} */ (speaker_embeddings)).view(1, -1, style_dim);
+        const inputs = this.tokenizer(text_inputs, {
+            padding: true,
+            truncation: true,
+        });
+
+        // @ts-expect-error TS2339
+        const { waveform } = await this.model.generate_speech({
+            ...inputs,
+            style: speaker_embeddings,
+            num_inference_steps,
+            speed,
+        });
+
+        return new RawAudio(
+            waveform.data,
+            sampling_rate,
+        )
+    }
+
     async _call_text_to_waveform(text_inputs) {
 
-        let inputs;
-        if (this.processor) {
-            inputs = this.processor(text_inputs);
-        } else {
-            inputs = this.tokenizer(text_inputs, {
-                padding: true,
-                truncation: true,
-            });
-        }
+        // Run tokenization
+        const inputs = this.tokenizer(text_inputs, {
+            padding: true,
+            truncation: true,
+        });
 
         // Generate waveform
         const { waveform } = await this.model(inputs);
@@ -2897,32 +2943,16 @@ export class TextToAudioPipeline extends (/** @type {new (options: TextToAudioPi
             this.vocoder = await AutoModel.from_pretrained(this.DEFAULT_VOCODER_ID, { dtype: 'fp32' });
         }
 
-        // Load speaker embeddings as Float32Array from path/URL
-        if (typeof speaker_embeddings === 'string' || speaker_embeddings instanceof URL) {
-            // Load from URL with fetch
-            speaker_embeddings = new Float32Array(
-                await (await fetchBinary(speaker_embeddings)).arrayBuffer()
-            );
-        }
-
-        if (speaker_embeddings instanceof Float32Array) {
-            speaker_embeddings = new Tensor(
-                'float32',
-                speaker_embeddings,
-                [1, speaker_embeddings.length]
-            )
-        } else if (!(speaker_embeddings instanceof Tensor)) {
-            throw new Error("Speaker embeddings must be a `Tensor`, `Float32Array`, `string`, or `URL`.")
-        }
-
         // Run tokenization
         const { input_ids } = this.tokenizer(text_inputs, {
             padding: true,
             truncation: true,
         });
 
-        // NOTE: At this point, we are guaranteed that `speaker_embeddings` is a `Tensor`
-        // @ts-ignore
+        speaker_embeddings = await this._prepare_speaker_embeddings(speaker_embeddings);
+        speaker_embeddings = speaker_embeddings.view(1, -1);
+
+        // @ts-expect-error TS2339
         const { waveform } = await this.model.generate_speech(input_ids, speaker_embeddings, { vocoder: this.vocoder });
 
         const sampling_rate = this.processor.feature_extractor.config.sampling_rate;
@@ -3424,7 +3454,7 @@ export async function pipeline(
         revision = 'main',
         device = null,
         dtype = null,
-        subfolder = null,
+        subfolder = 'onnx',
         use_external_data_format = null,
         model_file_name = null,
         session_options = {},
@@ -3491,7 +3521,6 @@ export async function pipeline(
  * @private
  */
 async function loadItems(mapping, model, pretrainedOptions) {
-    const { subfolder, ...rest } = pretrainedOptions;
 
     const result = Object.create(null);
 
@@ -3499,8 +3528,6 @@ async function loadItems(mapping, model, pretrainedOptions) {
     const promises = [];
     for (const [name, cls] of mapping.entries()) {
         if (!cls) continue;
-
-        const options = name === 'model' ? { ...rest, subfolder: subfolder ?? 'onnx' } : pretrainedOptions;
 
         /**@type {Promise} */
         let promise;
@@ -3515,17 +3542,14 @@ async function loadItems(mapping, model, pretrainedOptions) {
                         return;
                     }
                     try {
-                        resolve(await c.from_pretrained(model, options));
+                        resolve(await c.from_pretrained(model, pretrainedOptions));
                         return;
                     } catch (err) {
                         if (err.message?.includes('Unsupported model type')) {
                             // If the error is due to an unsupported model type, we
                             // save the error and try the next class.
                             e = err;
-                        } else if (
-                            err.message?.includes('Could not locate file') ||
-                            err.message?.includes('Unauthorized access to file')
-                        ) {
+                        } else if (err.message?.includes('Could not locate file')) {
                             e = err;
                         } else {
                             reject(err);
@@ -3537,7 +3561,7 @@ async function loadItems(mapping, model, pretrainedOptions) {
                 reject(e);
             })
         } else {
-            promise = cls.from_pretrained(model, options);
+            promise = cls.from_pretrained(model, pretrainedOptions);
         }
 
         result[name] = promise;

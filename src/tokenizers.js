@@ -1394,6 +1394,8 @@ class PreTokenizer extends Callable {
                 return new DigitsPreTokenizer(config);
             case 'Replace':
                 return new ReplacePreTokenizer(config);
+            case 'FixedLength':
+                return new FixedLengthPreTokenizer(config);
             default:
                 throw new Error(`Unknown PreTokenizer type: ${config.type}`);
         }
@@ -2281,7 +2283,6 @@ class VitsDecoder extends Decoder {
 class MetaspacePreTokenizer extends PreTokenizer {
     /**
      * @param {Object} config The configuration object for the MetaspacePreTokenizer.
-     * @param {boolean} config.add_prefix_space Whether to add a prefix space to the first token.
      * @param {string} config.replacement The character to replace spaces with.
      * @param {string} [config.str_rep=config.replacement] An optional string representation of the replacement character.
      * @param {'first'|'never'|'always'} [config.prepend_scheme='always'] The metaspace prepending scheme.
@@ -2289,7 +2290,6 @@ class MetaspacePreTokenizer extends PreTokenizer {
     constructor(config) {
         super();
 
-        this.addPrefixSpace = config.add_prefix_space;
         this.replacement = config.replacement;
         this.strRep = config.str_rep || this.replacement;
         this.prepend_scheme = config.prepend_scheme ?? 'always';
@@ -2311,9 +2311,8 @@ class MetaspacePreTokenizer extends PreTokenizer {
 
         if (
             // We add a prefix space if:
-            //  (1) The addPrefixSpace option is enabled and the normalized
-            //      token does not already start with the replacement character.
-            (this.addPrefixSpace && !normalized.startsWith(this.replacement))
+            //  (1) The normalized token does not already start with the replacement character.
+            !normalized.startsWith(this.replacement)
 
             // and (2) either:
             //  (a) prepend_scheme is 'always'
@@ -2337,13 +2336,11 @@ class MetaspaceDecoder extends Decoder {
     /**
      * Constructs a new MetaspaceDecoder object.
      * @param {Object} config The configuration object for the MetaspaceDecoder.
-     * @param {boolean} config.add_prefix_space Whether to add a prefix space to the decoded string.
      * @param {string} config.replacement The string to replace spaces with.
      */
     constructor(config) {
         super(config);
 
-        this.addPrefixSpace = config.add_prefix_space;
         this.replacement = config.replacement;
     }
 
@@ -2352,7 +2349,7 @@ class MetaspaceDecoder extends Decoder {
         const result = [];
         for (let i = 0; i < tokens.length; ++i) {
             let normalized = tokens[i].replaceAll(this.replacement, ' ');
-            if (this.addPrefixSpace && i == 0 && normalized.startsWith(' ')) {
+            if (i == 0 && normalized.startsWith(' ')) {
                 normalized = normalized.substring(1);
             }
             result.push(normalized);
@@ -2514,6 +2511,31 @@ class ReplacePreTokenizer extends PreTokenizer {
             return [text];
         }
         return [text.replaceAll(this.pattern, this.config.content)];
+    }
+}
+
+class FixedLengthPreTokenizer extends PreTokenizer {
+    /**
+     * @param {Object} config The configuration options for the pre-tokenizer.
+     * @param {number} config.length The fixed length to split the text into.
+     */
+    constructor(config) {
+        super();
+        this._length = config.length;
+    }
+
+    /**
+     * Pre-tokenizes the input text by splitting it into fixed-length tokens.
+     * @param {string} text The text to be pre-tokenized.
+     * @param {Object} [options] Additional options for the pre-tokenization logic.
+     * @returns {string[]} An array of tokens produced by splitting the input text into fixed-length tokens.
+     */
+    pre_tokenize_text(text, options) {
+        const tokens = [];
+        for (let i = 0; i < text.length; i += this._length) {
+            tokens.push(text.slice(i, i + this._length));
+        }
+        return tokens;
     }
 }
 
@@ -3429,7 +3451,6 @@ export class LlamaTokenizer extends PreTrainedTokenizer {
             this.normalizer = null;
             this.pre_tokenizer = new MetaspacePreTokenizer({
                 replacement: SPIECE_UNDERLINE,
-                add_prefix_space: true,
                 prepend_scheme: "first",
             });
         }
