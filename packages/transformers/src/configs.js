@@ -44,7 +44,7 @@ import { getModelJSON } from './utils/hub.js';
 /**
  * Loads a config from the specified path.
  * @param {string} pretrained_model_name_or_path The path to the config directory.
- * @param {PretrainedOptions} options Additional options for loading the config.
+ * @param {PretrainedOptions & { subfolder?: string | null }} options Additional options for loading the config.
  * @returns {Promise<Object>} A promise that resolves with information about the loaded config.
  */
 async function loadConfig(pretrained_model_name_or_path, options) {
@@ -583,7 +583,7 @@ export class PretrainedConfig {
      * Loads a pre-trained config from the given `pretrained_model_name_or_path`.
      *
      * @param {string} pretrained_model_name_or_path The path to the pre-trained config.
-     * @param {PretrainedOptions} options Additional options for loading the config.
+     * @param {PretrainedOptions & { subfolder?: string | null }} options Additional options for loading the config.
      * @throws {Error} Throws an error if the config.json is not found in the `pretrained_model_name_or_path`.
      *
      * @returns {Promise<PretrainedConfig>} A new instance of the `PretrainedConfig` class.
@@ -597,7 +597,7 @@ export class PretrainedConfig {
             // NOTE: kept for compatibility with pre-v4 API and downstream forks
             subfolder = null,
             local_files_only = false,
-            revision = main,
+            revision = 'main',
         } = {},
     ) {
         if (config && !(config instanceof PretrainedConfig)) {
