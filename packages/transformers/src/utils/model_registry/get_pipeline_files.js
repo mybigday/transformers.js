@@ -16,6 +16,7 @@ import { SUPPORTED_TASKS, TASK_ALIASES } from '../../pipelines/index.js';
  * @param {import('../dtypes.js').DataType|Record<string, import('../dtypes.js').DataType>} [options.dtype=null] - Override dtype
  * @param {import('../devices.js').DeviceType|Record<string, import('../devices.js').DeviceType>} [options.device=null] - Override device
  * @param {string} [options.model_file_name=null] - Override the model file name (excluding .onnx suffix)
+ * @param {string|null} [options.subfolder=null] - Subfolder of the repo containing the tokenizer files, if any
  * @returns {Promise<string[]>} Array of file paths that will be loaded
  * @throws {Error} If the task is not supported
  */

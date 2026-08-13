@@ -181,14 +181,16 @@ export class ModelRegistry {
      * Get tokenizer files needed for a specific model.
      *
      * @param {string} modelId - The model id
+     * @param {Object} [options] - Optional parameters
+     * @param {string|null} [options.subfolder=null] - Subfolder of the repo containing the tokenizer files, if any
      * @returns {Promise<string[]>} Array of tokenizer file paths
      *
      * @example
      * const files = await ModelRegistry.get_tokenizer_files('onnx-community/gpt2-ONNX');
      * console.log(files); // ['tokenizer.json', 'tokenizer_config.json']
      */
-    static async get_tokenizer_files(modelId) {
-        return get_tokenizer_files(modelId);
+    static async get_tokenizer_files(modelId, options = {}) {
+        return get_tokenizer_files(modelId, options);
     }
 
     /**

@@ -105,7 +105,9 @@ export async function pipeline(
         revision = 'main',
         device = null,
         dtype = null,
-        subfolder = 'onnx',
+        // NOTE: defaults to `null` rather than `'onnx'` so that it applies to every component.
+        // The model itself still falls back to `'onnx'` below; tokenizer/processor use it as-is.
+        subfolder = null,
         use_external_data_format = null,
         model_file_name = null,
         session_options = {},
@@ -134,6 +136,7 @@ export async function pipeline(
     const expected_files = await get_pipeline_files(task, model, {
         device,
         dtype,
+        subfolder,
     });
 
     /** @type {import('./utils/core.js').FilesLoadingMap} */
@@ -167,9 +170,16 @@ export async function pipeline(
         session_options,
     };
 
-    // Determine which components to load based on the expected files
-    const hasTokenizer = expected_files.includes('tokenizer.json');
-    const hasProcessor = expected_files.includes('preprocessor_config.json');
+    // Determine which components to load based on the expected files.
+    // NOTE: paths may be prefixed with `subfolder`, so match on the file name itself.
+    /** @type {(name: string) => (f: string) => boolean} */
+    const named = (name) => (f) => f === name || f.endsWith(`/${name}`);
+    const hasTokenizer = expected_files.some(named('tokenizer.json'));
+    const hasProcessor = expected_files.some(named('preprocessor_config.json'));
+
+    // The model files live under `onnx/` by default, whereas the other components
+    // default to the repo root. Only the model gets the `'onnx'` fallback.
+    const modelOptions = { ...pretrainedOptions, subfolder: subfolder ?? 'onnx' };
 
     // Resolve the correct model class (needs config when multiple candidates exist)
     const modelClasses = pipelineInfo.model;
@@ -184,9 +194,9 @@ export async function pipeline(
                     `None of the candidate model classes support this type.`,
             );
         }
-        modelPromise = matchedClass.from_pretrained(model, { ...pretrainedOptions, config: resolvedConfig });
+        modelPromise = matchedClass.from_pretrained(model, { ...modelOptions, config: resolvedConfig });
     } else {
-        modelPromise = modelClasses.from_pretrained(model, pretrainedOptions);
+        modelPromise = modelClasses.from_pretrained(model, modelOptions);
     }
 
     // Load all components in parallel
