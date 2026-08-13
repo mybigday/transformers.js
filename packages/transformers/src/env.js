@@ -29,7 +29,7 @@ import url from 'node:url';
 
 import { fetchBinary } from './utils/fetch-binary.js';
 
-const VERSION = '4.2.0-beta.1';
+const VERSION = '4.2.0-beta.2';
 
 const HAS_SELF = typeof self !== 'undefined';
 const IS_REACT_NATIVE_ENV = typeof navigator !== 'undefined' && navigator.product === 'ReactNative';
