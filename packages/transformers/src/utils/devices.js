@@ -20,7 +20,7 @@ export const DEVICE_TYPES = Object.freeze({
     'webnn-gpu': 'webnn-gpu', // WebNN GPU
     'webnn-cpu': 'webnn-cpu', // WebNN CPU
 });
-const DEFAULT_DEVICE = apis.IS_NODE_ENV ? 'cpu' : (apis.IS_REACT_NATIVE_ENV ? 'xnnpack' : 'wasm');
+const DEFAULT_DEVICE = apis.IS_NODE_ENV || apis.IS_REACT_NATIVE_ENV ? 'cpu' : 'wasm';
 
 /**
  * @typedef {keyof typeof DEVICE_TYPES} DeviceType
