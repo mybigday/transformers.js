@@ -21,7 +21,7 @@ import * as ONNX_REACT_NATIVE from 'onnxruntime-react-native';
 import { loadWasmBinary, loadWasmFactory } from './utils/cacheWasm.js';
 import { isBlobURL, toAbsoluteURL } from '../utils/hub/utils.js';
 import { logger } from '../utils/logger.js';
-export { Tensor } from 'onnxruntime-common';
+import { Tensor as CommonTensor } from 'onnxruntime-common';
 
 /**
  * @typedef {import('onnxruntime-common').InferenceSession.ExecutionProviderConfig} ONNXExecutionProviders
@@ -151,6 +151,15 @@ if (ORT_SYMBOL in globalThis) {
     supportedDevices.push('wasm');
     defaultDevices = ['wasm'];
 }
+
+/**
+ * Use the selected native runtime's Tensor constructor. React Native can ship an
+ * older onnxruntime-common than Node/web, and its tensors must share the same
+ * constructor identity as the native backend.
+ * @typedef {import('onnxruntime-common').Tensor} Tensor
+ */
+/** @type {typeof import('onnxruntime-common').Tensor} */
+export const Tensor = apis.IS_REACT_NATIVE_ENV ? ONNX.Tensor : CommonTensor;
 
 // @ts-ignore
 const InferenceSession = ONNX.InferenceSession;
