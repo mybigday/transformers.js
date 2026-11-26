@@ -1,4 +1,4 @@
-import { Tensor, cat, stack, layer_norm, ones_like, zeros_like, full_like, rand, std_mean } from "../../src/transformers.js";
+import { Tensor, cat, stack, layer_norm, mean_pooling, ones_like, zeros_like, full_like, rand, std_mean } from "../../src/transformers.js";
 import { init } from "../init.js";
 
 init();
@@ -50,7 +50,27 @@ describe("Tensor operations", () => {
       expect(concatenated).toEqual(target);
     });
 
-    // TODO add tests for errors
+    it("should throw when non-concatenated dimensions do not match", () => {
+      const a = new Tensor("float32", [1, 2, 3, 4, 5, 6], [2, 3]);
+      const b = new Tensor("float32", [1, 2, 3, 4, 5, 6], [3, 2]);
+
+      expect(() => cat([a, b], 0)).toThrow("Tensor 1 has shape [3,2]; expected rank 2 and sizes matching [2,3] except in dimension 0.");
+      expect(() => cat([a, b], -2)).toThrow("except in dimension 0.");
+      // Matching on the non-concatenated dim is still fine
+      const c = new Tensor("float32", [7, 8, 9, 10], [2, 2]);
+      expect(cat([a, c], 1)).toEqual(new Tensor("float32", [1, 2, 3, 7, 8, 4, 5, 6, 9, 10], [2, 5]));
+    });
+
+    it("should throw when tensors have different ranks", () => {
+      const a = new Tensor("float32", [1, 2, 3, 4, 5, 6], [2, 3]);
+      const b = new Tensor("float32", [1, 2, 3], [3]);
+
+      expect(() => cat([a, b], 0)).toThrow("Tensor 1 has shape [3]; expected rank 2 and sizes matching [2,3] except in dimension 0.");
+    });
+
+    it("should throw on an empty list", () => {
+      expect(() => cat([])).toThrow("Expected a non-empty list of tensors to concatenate.");
+    });
   });
 
   describe("slice", () => {
@@ -142,6 +162,11 @@ describe("Tensor operations", () => {
 
   describe("stack", () => {
     const t1 = new Tensor("float32", [0, 1, 2, 3, 4, 5], [1, 3, 2]);
+
+    it("should throw when tensors have different shapes", () => {
+      const t2 = new Tensor("float32", [0, 1, 2, 3], [1, 2, 2]);
+      expect(() => stack([t1, t2], 0)).toThrow("Tensor 1 has shape [1,1,2,2]");
+    });
 
     it("should stack on dim=0", () => {
       const target1 = new Tensor("float32", [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5], [2, 1, 3, 2]);
@@ -347,6 +372,58 @@ describe("Tensor operations", () => {
     });
   });
 
+  describe("mean_pooling", () => {
+    it("should average only the attended tokens", () => {
+      // 2 sequences of 3 tokens, embedDim 2; the second sequence has one padding token.
+      const hidden = new Tensor("float32", [1, 2, 3, 4, 5, 6, 10, 20, 30, 40, 99, 99], [2, 3, 2]);
+      const mask = new Tensor("int64", [1n, 1n, 1n, 1n, 1n, 0n], [2, 3]);
+      const target = new Tensor("float32", [3, 4, 20, 30], [2, 2]);
+      expect(mean_pooling(hidden, mask)).toEqual(target);
+    });
+
+    it("should match a per-dimension reference implementation exactly", () => {
+      const [batchSize, seqLength, embedDim] = [3, 7, 16];
+      const hidden = rand([batchSize, seqLength, embedDim]);
+      // Trailing padding, padding between tokens, and weights other than 1.
+      // prettier-ignore
+      const maskData = new BigInt64Array([
+        1n, 1n, 1n, 1n, 1n, 1n, 1n,
+        1n, 0n, 0n, 0n, 0n, 0n, 0n,
+        1n, 0n, 2n, 3n, 0n, 1n, 0n,
+      ]);
+      const mask = new Tensor("int64", maskData, [batchSize, seqLength]);
+
+      const expected = new Float32Array(batchSize * embedDim);
+      for (let i = 0; i < batchSize; ++i) {
+        for (let k = 0; k < embedDim; ++k) {
+          let sum = 0;
+          let count = 0;
+          for (let j = 0; j < seqLength; ++j) {
+            const attn = Number(maskData[i * seqLength + j]);
+            count += attn;
+            sum += hidden.data[(i * seqLength + j) * embedDim + k] * attn;
+          }
+          expected[i * embedDim + k] = sum / count;
+        }
+      }
+      expect(mean_pooling(hidden, mask).data).toEqual(expected);
+    });
+
+    it("returns zeros for a sequence with no attended tokens", () => {
+      // Matches sentence-transformers, which clamps the denominator to 1e-9
+      // so an all-padding row produces zeros rather than NaN.
+      const hidden = new Tensor("float32", [1, 2, 3, 4], [1, 2, 2]);
+      const mask = new Tensor("int64", [0n, 0n], [1, 2]);
+      expect(Array.from(mean_pooling(hidden, mask).data)).toEqual([0, 0]);
+    });
+
+    it("should ignore non-finite values at padding positions", () => {
+      const hidden = new Tensor("float32", [1, 2, 3, 4, NaN, Infinity], [1, 3, 2]);
+      const mask = new Tensor("int64", [1n, 1n, 0n], [1, 3]);
+      expect(Array.from(mean_pooling(hidden, mask).data)).toEqual([2, 3]);
+    });
+  });
+
   describe("layer_norm", () => {
     it("should calculate layer norm", () => {
       const t1 = new Tensor("float32", [1, 2, 3, 4, 5, 6], [2, 3]);
@@ -461,7 +538,10 @@ describe("Tensor operations", () => {
       expect(Array.from(tensor.remainder_(0).data)).toEqual([NaN, NaN, NaN]);
     });
     it.each(["float32", "float64"])("should preserve small %s remainders with large same-sign divisors", (type) => {
-      for (const [divisor, values] of [[1e20, [1, 3]], [-1e20, [-1, -3]]]) {
+      for (const [divisor, values] of [
+        [1e20, [1, 3]],
+        [-1e20, [-1, -3]],
+      ]) {
         const tensor = new Tensor(type, values, [2]);
         expect(Array.from(tensor.remainder(divisor).data)).toEqual(values);
         expect(Array.from(tensor.data)).toEqual(values);
