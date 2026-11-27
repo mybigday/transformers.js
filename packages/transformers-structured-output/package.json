@@ -1,6 +1,6 @@
 {
   "name": "@fugood/transformers-structured-output",
-  "version": "4.3.2-beta.0",
+  "version": "4.3.2-beta.1",
   "description": "Dependency-free constrained generation for Transformers.js",
   "main": "./dist/index.cjs",
   "types": "./types/index.d.ts",
@@ -41,7 +41,7 @@
   },
   "homepage": "https://github.com/huggingface/transformers.js#readme",
   "peerDependencies": {
-    "@fugood/transformers": "^4.3.2-beta.0"
+    "@fugood/transformers": "^4.3.2-beta.1"
   },
   "devDependencies": {
     "@fugood/transformers": "workspace:*",
