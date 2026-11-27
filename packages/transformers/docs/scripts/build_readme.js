@@ -76,7 +76,7 @@ function renderTemplate({ intro, installation, quickTour, customUsage, tasks, mo
 > | Pull request | Description |
 > | --- | --- |
 > | [huggingface/transformers.js#118](https://github.com/huggingface/transformers.js/pull/118) | **Support React Native** (the main reason for this build) |
-> | [huggingface/transformers.js#1966](https://github.com/huggingface/transformers.js/pull/1966) | Compute \`spectrogram()\` and audio feature extractor post-processing with ONNX Runtime ops |
+> | [huggingface/transformers.js#1966](https://github.com/huggingface/transformers.js/pull/1966) | Run \`spectrogram()\` and audio feature extractor post-processing as tensor ops |
 > | [huggingface/transformers.js#1541](https://github.com/huggingface/transformers.js/pull/1541) | Whisper language auto-detection for multilingual models |
 
 ${intro}
