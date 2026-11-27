@@ -69,6 +69,16 @@ function renderTemplate({ intro, installation, quickTour, customUsage, tasks, mo
     <a href="https://huggingface.co/docs/transformers.js/index"><img alt="Documentation" src="https://img.shields.io/website/http/huggingface.co/docs/transformers.js/index.svg?down_color=red&down_message=offline&up_message=online"></a>
 </p>
 
+> [!NOTE]
+> **\`@fugood/transformers\`** is the BRICKS pre-release build of Transformers.js, published from the [\`bricks\`](https://github.com/mybigday/transformers.js/tree/bricks) branch of [mybigday/transformers.js](https://github.com/mybigday/transformers.js).
+> It follows upstream \`main\` and also includes these upstream pull requests that are not merged yet:
+>
+> | Pull request | Description |
+> | --- | --- |
+> | [huggingface/transformers.js#118](https://github.com/huggingface/transformers.js/pull/118) | **Support React Native** (the main reason for this build) |
+> | [huggingface/transformers.js#1966](https://github.com/huggingface/transformers.js/pull/1966) | Compute \`spectrogram()\` and audio feature extractor post-processing with ONNX Runtime ops |
+> | [huggingface/transformers.js#1541](https://github.com/huggingface/transformers.js/pull/1541) | Whisper language auto-detection for multilingual models |
+
 ${intro}
 
 ## Installation
